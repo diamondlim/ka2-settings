@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.hermes.ka2settings"
+    android:versionCode="55"
+    android:versionName="7.5">
+  <!-- The drive log is fetched from the host archive over HTTPS; Bluetooth stays for settings. -->
+  <uses-permission android:name="android.permission.INTERNET"/>
+  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+  <uses-permission android:name="android.permission.BLUETOOTH"/>
+  <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"/>
+  <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
+  <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
+      android:usesPermissionFlags="neverForLocation"/>
+  <!-- The app records the phone's own track, so location must apply on every Android version. The
+       previous maxSdkVersion="30" (a leftover from the Bluetooth-scan-on-old-Android requirement) made
+       the permission undeclared on Android 12+, where requestPermissions then fails instantly with no
+       dialog at all. -->
+  <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+  <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+  <application android:label="KA2 Settings" android:icon="@mipmap/ic_launcher"
+      android:allowBackup="false"
+      android:theme="@android:style/Theme.Material.NoActionBar">
+    <activity android:name=".SettingsActivity" android:exported="true">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN"/>
+        <category android:name="android.intent.category.LAUNCHER"/>
+      </intent-filter>
+    </activity>
+  </application>
+</manifest>

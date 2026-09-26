@@ -1,0 +1,20 @@
+# build toolchain, fetched by setup_toolchain.sh
+jdk/
+jdk.tar.gz
+sdk/
+cmdtools.zip
+
+# build output
+out/
+broken-*/
+backups/
+
+# signing material never belongs in the repo
+*.keystore
+*.jks
+
+# screen captures used while working on the lane view
+*.pgm
+
+# release binaries are attached to releases, not committed
+dist/*.apk
