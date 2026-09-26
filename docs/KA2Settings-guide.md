@@ -6,6 +6,8 @@ on the box really reads that setting.
 
 The app has three pages, switched by the bar at the top: **Settings** (this document), **Lane view** (what the model sees, drawn as a road) and **Logs** (what the box accepted). They share one live stream from the box, so the numbers on the Lane view and the rows in Settings are the same measurements.
 
+On the Settings page the ADAS rows sit under their own headings - **BEND AUTO-SLOW**, **CAR AHEAD**, **LANE CENTRING**, and **TUNING DEFAULTS** for the single override file they share - so the sections below match what you see on the phone, in that order. A heading appears only when the box actually reports rows for it.
+
 ## How to set anything
 
 - **Numeric rows**: `−` and `+` move one step of that row's own size (speeds 5 km/h, times 0.5 s,
@@ -54,6 +56,8 @@ status).
 
 ## Bend auto-slow — the `VIS_TURN_ACC_*` rows
 
+*App section: BEND AUTO-SLOW.*
+
 This is the vision → stock-ACC bridge. It reads the model's view of the road, and when the road ahead
 demands less speed than you have set, it presses the setpoint down 5 km/h at a time and hands the speed
 back afterwards. **It never actuates the brakes** — on this car the setpoint is the only lever the box has,
@@ -77,6 +81,8 @@ and the car's own ACC does the decelerating.
 
 ## Car ahead — the `VIS_LEAD_ACC_*` rows
 
+*App section: CAR AHEAD.*
+
 The camera model also predicts the cars in front. Acting on that lets the box start slowing *before* the
 car's own ACC has resolved the car ahead, so the deceleration begins earlier and more gently. Same lever:
 setpoint only, the ACC still does the following. It takes the **lower** of the bend limit and the car-ahead
@@ -91,6 +97,8 @@ limit, and it will never hand speed back while a slower car is still in front.
 | Max steps per car ahead | How much may be taken off for one car: 4 = 20 km/h. Re-arms once that car is no longer in front | 0–8, 1 | 4 |
 
 ## How lane centring works — and what the `LANE_CORRECTION_*` rows change
+
+*App section: LANE CENTRING.*
 
 Worth knowing before the rows, because it explains why those rows exist at all.
 

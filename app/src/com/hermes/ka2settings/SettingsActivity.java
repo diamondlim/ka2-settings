@@ -92,6 +92,12 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
     private Button themeButton;
     private LinearLayout tuningCard;
     private LinearLayout tuningSection;
+    private LinearLayout bendCard;
+    private LinearLayout bendSection;
+    private LinearLayout leadCard;
+    private LinearLayout leadSection;
+    private LinearLayout overridesCard;
+    private LinearLayout overridesSection;
     private TextView accStatus;
     private TextView wifiButton;
     private boolean wifiCollecting;
@@ -396,6 +402,18 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
         });
         linearLayoutCard2.addView(this.connectButton);
         linearLayout2.addView(linearLayoutCard2);
+        this.bendSection = addTuningSection(linearLayout2, "BEND AUTO-SLOW",
+                "Ahead of a bend, the box walks the car's own ACC set point down a step at a time and hands it back on the way out. It never touches the brakes - the set point is its only lever, and the car's ACC does the slowing. Tap - or + to step a row by its own size; the box clamps every value into the range shown.");
+        this.bendCard = (LinearLayout) this.bendSection.getChildAt(1);
+        this.leadSection = addTuningSection(linearLayout2, "CAR AHEAD",
+                "Slows for a car the camera can see before the car's own ACC has reacted to it - the set point only, so the ACC still does the following. If both this and a bend ask for less speed, the lower of the two wins.");
+        this.leadCard = (LinearLayout) this.leadSection.getChildAt(1);
+        this.tuningSection = addTuningSection(linearLayout2, "LANE CENTRING",
+                "A small extra steering correction that holds the car nearer the middle of its lane. These change it within about a second (the box writes them to a file the car re-reads). The file can only make the correction gentler than the code it is running - turning one up is a code change, not a slider.");
+        this.tuningCard = (LinearLayout) this.tuningSection.getChildAt(1);
+        this.overridesSection = addTuningSection(linearLayout2, "TUNING DEFAULTS",
+                "The three sections above share one override file on the box. This clears all of it at once, so every row in them returns to the value the running code ships with.");
+        this.overridesCard = (LinearLayout) this.overridesSection.getChildAt(1);
         linearLayout2.addView(sectionHeader("SOFTWARE SETTINGS"));
         this.softwareCard = card();
         TextView textView8 = new TextView(this);
@@ -452,20 +470,6 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
         textView12.setTextSize(12.0f);
         linearLayoutCard3.addView(textView12);
         linearLayout2.addView(linearLayoutCard3);
-        LinearLayout linearLayout6 = new LinearLayout(this);
-        this.tuningSection = linearLayout6;
-        linearLayout6.setOrientation(1);
-        this.tuningSection.setVisibility(8);
-        this.tuningSection.addView(sectionHeader("EXPERIMENTAL - LANE CORRECTION"));
-        this.tuningCard = card();
-        TextView textView13 = new TextView(this);
-        textView13.setText("These change the running controller within about a second (the box writes them to a file the car re-reads). The file can only make the correction gentler than the code it is running - turning one up is a code change, not a slider. Deleting that file restores the shipped values.");
-        textView13.setTextColor(this.MUTED);
-        textView13.setTextSize(12.0f);
-        textView13.setPadding(0, dp(4.0f), 0, dp(8.0f));
-        this.tuningCard.addView(textView13);
-        this.tuningSection.addView(this.tuningCard);
-        linearLayout2.addView(this.tuningSection);
         linearLayout2.addView(sectionHeader("DEVICE SETTINGS"));
         this.deviceCard = card();
         TextView textView14 = new TextView(this);
@@ -615,6 +619,31 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
         textView.setTypeface(Typeface.DEFAULT_BOLD);
         textView.setPadding(0, 0, 0, dp(6.0f));
         return textView;
+    }
+
+    /** The card that opens a tuning section: one sentence on what the rows below do and how to set
+     *  them. Kept per section rather than per row, so the rows themselves stay short. */
+    private LinearLayout blurbCard(String str) {
+        LinearLayout c = card();
+        TextView t = new TextView(this);
+        t.setText(str);
+        t.setTextColor(this.MUTED);
+        t.setTextSize(12.0f);
+        t.setPadding(0, dp(4.0f), 0, dp(8.0f));
+        c.addView(t);
+        return c;
+    }
+
+    /** One tuning section: heading, blurb, and the card the box's rows are added to. Hidden until a
+     *  row actually arrives, so a box that reports nothing leaves no empty headings behind. */
+    private LinearLayout addTuningSection(LinearLayout parent, String title, String blurb) {
+        LinearLayout wrap = new LinearLayout(this);
+        wrap.setOrientation(1);
+        wrap.setVisibility(8);
+        wrap.addView(sectionHeader(title));
+        wrap.addView(blurbCard(blurb));
+        parent.addView(wrap);
+        return wrap;
     }
 
     private View sectionHeader(String str) {
@@ -2207,10 +2236,18 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
             }
         }
         linearLayout2.addView(linearLayout3);
-        if ("tune".equals(str4)) {
-            LinearLayout linearLayout7 = this.tuningCard;
-            this.tuningSection.setVisibility(i);
-            linearLayout = linearLayout7;
+        if ("ACT_RESET_TUNING".equals(row.key)) {
+            this.overridesSection.setVisibility(0);
+            linearLayout = this.overridesCard;
+        } else if ("bend".equals(str4) || ("tune".equals(str4) && row.key != null && row.key.startsWith("VIS_TURN_ACC"))) {
+            this.bendSection.setVisibility(0);
+            linearLayout = this.bendCard;
+        } else if ("lead".equals(str4) || ("tune".equals(str4) && row.key != null && row.key.startsWith("VIS_LEAD_ACC"))) {
+            this.leadSection.setVisibility(0);
+            linearLayout = this.leadCard;
+        } else if ("lane".equals(str4) || "tune".equals(str4)) {
+            this.tuningSection.setVisibility(0);
+            linearLayout = this.tuningCard;
         } else if ("dev".equals(str4)) {
             linearLayout = this.deviceCard;
         } else {
