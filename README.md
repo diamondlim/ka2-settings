@@ -1,6 +1,6 @@
 # KA2 Settings
 
-An Android front panel for a **KommuAssist KA2** — the openpilot-family device fitted to a BYD Sealion 7.
+An Android front panel for a **KA2** — the openpilot-family device fitted to a BYD Sealion 7.
 It speaks to the box over a Bluetooth SPP link and shows what the box is doing, lets you press the car's own
 ACC buttons, and exposes every live tuning knob the box's code actually reads.
 
