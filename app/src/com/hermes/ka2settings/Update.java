@@ -36,12 +36,20 @@ import java.util.Map;
  *
  * Release assets are named KA2Settings-v7.7-57.apk, i.e. the versionCode is in the file name, so the
  * cheap tag comparison can be confirmed exactly before downloading anything.
+ *
+ * On a unit with no APK installer at all - the car's head unit - the check still runs and still reports
+ * the newer release, but the update itself happens over ADB from a host the unit trusts
+ * (install_over_adb.sh in this repo). {@link #hasApkInstaller} is what decides which of the two the
+ * button offers, so the failure is named before the download rather than after it.
  */
 public final class Update {
 
     private static final String TAG = "KA2Settings";
     private static final String API =
             "https://api.github.com/repos/diamondlim/ka2-settings/releases/latest";
+    /** Where a person (or a host with adb) fetches the build from: the release page, not the API. */
+    private static final String RELEASES =
+            "https://github.com/diamondlim/ka2-settings/releases/latest";
     private static final Handler UI = new Handler(Looper.getMainLooper());
 
     /** Set once a newer release is known: what to fetch, and its label. */
@@ -88,6 +96,12 @@ public final class Update {
                     return;
                 }
                 if (readyUrl != null) {
+                    if (!hasApkInstaller(ctx)) {
+                        say(status, "no APK installer on this unit - update over ADB: run "
+                                + "install_over_adb.sh on a host the unit trusts ("
+                                + readyTag + " from " + RELEASES + ")");
+                        return;
+                    }
                     install(ctx, status, button);
                 } else {
                     check(ctx, status, button, true);
@@ -152,8 +166,14 @@ public final class Update {
                                 return;
                             }
                             readyUrl = furi;
-                            button.setText("Install " + tag);
-                            say(status, tag + " is available (installed " + haveName + ")");
+                            if (hasApkInstaller(ctx)) {
+                                button.setText("Install " + tag);
+                                say(status, tag + " is available (installed " + haveName + ")");
+                            } else {
+                                button.setText("Update over ADB");
+                                say(status, tag + " is available (installed " + haveName
+                                        + ") - this unit has no APK installer");
+                            }
                         }
                     });
                 } catch (final Exception e) {
@@ -220,8 +240,8 @@ public final class Update {
                             try {
                                 ctx.startActivity(view);
                             } catch (Exception e) {
-                                say(status, "no installer on this unit accepted the APK: "
-                                        + brief(e));
+                                say(status, "no installer on this unit accepted the APK ("
+                                        + brief(e) + ") - update over ADB instead");
                             }
                         }
                     });
@@ -240,6 +260,26 @@ public final class Update {
     }
 
     // ------------------------------------------------------------------ helpers
+
+    /**
+     * Whether this unit will take an APK itself.
+     *
+     * The car's head unit ships no activity for application/vnd.android.package-archive, and no intent
+     * construction can conjure one: without this check the app downloads the release and then reports a
+     * failure at the last step. Asked up front, the same fact becomes an instruction. On an unknown
+     * answer it returns true, so a unit that cannot be probed keeps the old behaviour rather than being
+     * locked out of updating.
+     */
+    static boolean hasApkInstaller(Context c) {
+        try {
+            Intent probe = new Intent(Intent.ACTION_VIEW);
+            probe.setDataAndType(Uri.fromFile(new File(c.getCacheDir(), "probe.apk")),
+                    "application/vnd.android.package-archive");
+            return !c.getPackageManager().queryIntentActivities(probe, 0).isEmpty();
+        } catch (Exception e) {
+            return true;
+        }
+    }
 
     private static void say(final TextView status, final String text) {
         if (status == null) {

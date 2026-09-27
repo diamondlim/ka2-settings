@@ -24,6 +24,28 @@ The first card on the Settings page is about the app itself, not the car.
 - A release is only offered when its `versionCode` is greater than the installed one, so a mistagged
   release cannot downgrade the car. Updates keep every setting: they are signed with the same key.
 
+### On the car's head unit, updates go over ADB
+
+The head unit has **no activity that accepts an APK** — it ships no installer for
+`application/vnd.android.package-archive`, and its *install unknown apps* screen is only a stub — so no
+in-app install can ever complete there. The app checks first and, on that unit, says
+`vX.Y is available (installed X.Z) - this unit has no APK installer`, with the button reading
+**Update over ADB**; tapping it names the release and the command rather than downloading an APK nothing
+will take. On a phone (which does have an installer) the behaviour above is unchanged.
+
+Updating the head unit is therefore done from a host that the unit trusts, with
+`install_over_adb.sh` in this repo:
+
+```
+./ship.sh              # build, then install the result to the head unit over ADB
+./install_over_adb.sh  # install the newest dist/*.apk
+```
+
+The script connects to the unit, refuses anything that does not identify as the car's head unit,
+installs with `-r -g` (replace, and grant the permissions it needs so there are no taps in the car),
+then **verifies the installed `versionCode`** and restarts the app. The car has to be awake — the unit
+loses power about a minute after the car locks.
+
 ## How to set anything
 
 - **Numeric rows**: `−` and `+` move one step of that row's own size (speeds 5 km/h, times 0.5 s,
