@@ -150,7 +150,11 @@ public class BtSpp {
   }
 
   /** Scan for the box - for a replaced box, or when the configured address is wrong. It learns the
-   *  address of whatever it finds, so the next launch goes straight back to an address. */
+   *  address of whatever it finds, so the next launch goes straight back to an address.
+   *
+   *  Unreachable from the UI since v7.8: this box's Bluetooth is hidden, so a discovery scan returns
+   *  nothing and the only honest path is the configured address. Kept because a replacement box that
+   *  does advertise itself would make it useful again. */
   public void findByScan(Context context) {
     BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
     if (adapter == null || !adapter.isEnabled()) {
@@ -322,7 +326,7 @@ public class BtSpp {
         Log.w(TAG, "SPP link failed: " + e.getMessage());
         if (wanted) {
           listener.onState("disconnected", "cannot reach " + device.getAddress() + " ("
-              + e.getMessage() + ") - check the box is powered, or use Find the box");
+              + e.getMessage() + ") - check the box is powered and that the address is right");
         }
       } catch (SecurityException e) {
         wanted = false;

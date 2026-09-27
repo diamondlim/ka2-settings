@@ -29,7 +29,7 @@ import java.util.Map;
 
 /* JADX INFO: loaded from: classes.dex */
 public class SettingsActivity extends Activity implements BtSpp.Listener {
-    private static final String APP_VERSION = "7.7";
+    private static final String APP_VERSION = "7.8";
     private static final String PREFS = "ka2settings";
     private static final String PREF_HEIGHT = "height_choice";
     private static final String PREF_LENS = "lens";
@@ -354,7 +354,7 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
         linearLayout5.addView(this.macValue);
         linearLayoutCard2.addView(linearLayout5);
         TextView textView7 = new TextView(this);
-        textView7.setText("The app connects to this address and to nothing else. Change it if the box is ever replaced, or use Find the box to scan for it.");
+        textView7.setText("The app connects to this address and to nothing else. Change it if the box is ever replaced.");
         textView7.setTextColor(this.MUTED);
         textView7.setTextSize(12.0f);
         textView7.setPadding(0, 0, 0, dp(6.0f));
@@ -371,20 +371,6 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
             }
         });
         linearLayoutCard2.addView(button2);
-        Button button3 = new Button(this);
-        button3.setText("Find the box");
-        button3.setAllCaps(false);
-        button3.setTextColor(this.TEXT);
-        button3.setBackground(roundRect(this.CHIP, 8));
-        button3.setOnClickListener(new View.OnClickListener() { // from class: com.hermes.ka2settings.SettingsActivity.4
-            @Override // android.view.View.OnClickListener
-            public void onClick(View view) {
-                SettingsActivity.this.bt.forget();
-                SettingsActivity.this.bt.stop();
-                SettingsActivity.this.bt.findByScan(SettingsActivity.this);
-            }
-        });
-        linearLayoutCard2.addView(button3);
         Button button4 = new Button(this);
         this.connectButton = button4;
         button4.setText("Connect to box");
