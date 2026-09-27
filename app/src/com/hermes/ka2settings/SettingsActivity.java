@@ -29,7 +29,7 @@ import java.util.Map;
 
 /* JADX INFO: loaded from: classes.dex */
 public class SettingsActivity extends Activity implements BtSpp.Listener {
-    private static final String APP_VERSION = "7.5";
+    private static final String APP_VERSION = "7.7";
     private static final String PREFS = "ka2settings";
     private static final String PREF_HEIGHT = "height_choice";
     private static final String PREF_LENS = "lens";
@@ -218,6 +218,7 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
         linearLayout2.setPadding(dp(16.0f), dp(6.0f), dp(16.0f), dp(28.0f));
         scrollView.addView(linearLayout2);
         linearLayout.addView(scrollView, new LinearLayout.LayoutParams(-1, 0, 1.0f));
+        linearLayout2.addView(buildUpdateCard());
         linearLayout2.addView(sectionHeader("APPEARANCE"));
         LinearLayout linearLayoutCard = card();
         LinearLayout linearLayout3 = new LinearLayout(this);
@@ -2440,5 +2441,38 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
         if (this.track != null) {
             this.track.shutdown();
         }
+    }
+
+    /**
+     * The update card: which version is installed, whether GitHub has something newer, and a button
+     * that checks - then turns into "Install vX.Y" so the same tap does the update. The check runs as
+     * soon as the settings screen opens, so a new release is noticed without anyone going to look.
+     */
+    private LinearLayout buildUpdateCard() {
+        LinearLayout card = card();
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(0);
+        row.setGravity(16);
+        row.setPadding(0, dp(4.0f), 0, dp(4.0f));
+        TextView label = new TextView(this);
+        label.setText("KA2 Settings");
+        label.setTextColor(this.TEXT);
+        label.setTextSize(15.0f);
+        row.addView(label, new LinearLayout.LayoutParams(0, -2, 1.0f));
+        Button button = new Button(this);
+        button.setAllCaps(false);
+        button.setText("Check for update");
+        button.setTextColor(this.TEXT);
+        button.setBackground(roundRect(this.CHIP, 8));
+        button.setPadding(dp(14.0f), dp(6.0f), dp(14.0f), dp(6.0f));
+        row.addView(button);
+        card.addView(row);
+        TextView status = new TextView(this);
+        status.setTextColor(this.MUTED);
+        status.setTextSize(12.0f);
+        status.setPadding(0, dp(6.0f), 0, 0);
+        card.addView(status);
+        Update.attach(this, status, button);
+        return card;
     }
 }
