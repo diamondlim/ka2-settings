@@ -8,6 +8,22 @@ The app has three pages, switched by the bar at the top: **Settings** (this docu
 
 On the Settings page the ADAS rows sit under their own headings - **BEND AUTO-SLOW**, **CAR AHEAD**, **LANE CENTRING**, and **TUNING DEFAULTS** for the single override file they share - so the sections below match what you see on the phone, in that order. A heading appears only when the box actually reports rows for it.
 
+## KA2 Settings (the update card)
+
+The first card on the Settings page is about the app itself, not the car.
+
+- **It checks this project's GitHub releases every time the settings screen opens**, and says either
+  `up to date - 7.7 is the newest release` or `v7.8 is available (installed 7.7)`.
+- **"Check for update"** does the same check on demand.
+- When a newer release exists the button becomes **Install vX.Y**: tapping it downloads the APK and hands
+  it to the phone's installer, which asks for the usual confirmation tap. Nothing installs by itself.
+- **First time only**, Android needs to be told that this app may install apps: tap the button, and if the
+  app replies `allow KA2 Settings to install apps, then tap again`, it has already opened that screen —
+  switch it on and tap once more. This is the same switch as *Settings → Apps → Special access → Install
+  unknown apps → KA2 Settings*.
+- A release is only offered when its `versionCode` is greater than the installed one, so a mistagged
+  release cannot downgrade the car. Updates keep every setting: they are signed with the same key.
+
 ## How to set anything
 
 - **Numeric rows**: `−` and `+` move one step of that row's own size (speeds 5 km/h, times 0.5 s,
