@@ -13,7 +13,7 @@ On the Settings page the ADAS rows sit under their own headings - **BEND AUTO-SL
 The first card on the Settings page is about the app itself, not the car.
 
 - **It checks this project's GitHub releases every time the settings screen opens**, and says either
-  `up to date - 7.7 is the newest release` or `v7.8 is available (installed 7.7)`.
+  `up to date - 7.9 is the newest release` or `v7.10 is available (installed 7.9)`.
 - **"Check for update"** does the same check on demand.
 - When a newer release exists the button becomes **Install vX.Y**: tapping it downloads the APK and hands
   it to the phone's installer, which asks for the usual confirmation tap. Nothing installs by itself.
@@ -150,8 +150,19 @@ toward one line through a long bend. Nothing is broken; the controller simply ne
 
 - the left and right line of your own lane are read at a lookahead of about 1.5 s of travel (never closer
   than 10 m), and the lane centre is the midpoint between them at that distance;
+- with **Work on the lane, not on the bend** at 1 (the shipped value) the same pair is read *again* at twice
+  that distance, and a quarter of it is subtracted: `offset = centre(L) − ¼ · centre(2L)`. Removing the lane's
+  own curvature is what leaves a **position error** — where you sit in the lane — instead of a mixture of the
+  bend and your position in it. At 0 the plain midpoint is used, so the bend's curvature is counted a second
+  time on top of what the car's own steering is already doing; that is what made the car turn in early and
+  hold its line through a corner. If the longer sample is missing (a short line), the plain offset is used
+  rather than a guess;
 - the offset becomes a curvature with `κ = 2 · offset / L²`, bounded by a **lateral-acceleration budget**
   (~0.3 m/s² of extra cornering force) rather than a flat curvature cap, so it stays gentle as speed rises;
+- **Where to sit in the lane** is added to that offset deliberately, so the correction holds you at a
+  position you chose rather than at the centre. It is spent from the same lateral budget (about 0.27 m/s² of
+  the 0.3 at the row's 0.30 m limit), so the further off centre it is asked to hold, the less budget is left
+  to hold it there;
 - it applies only while lane centring is active, above about 5 m/s, and outside lane changes.
 
 It deliberately does **not** use the model's planned path. That path is already lane-centred by
@@ -160,32 +171,49 @@ not a centring loop.
 
 **When it refuses to act.** No correction is always safer than a wrong one, so it bails out and does
 nothing when: either line is missing or less likely than the confidence row; the lane width it measures
-looks implausible (under ~1.5 m or over ~6 m); the centre offset is beyond the plausibility row; or the
-lines it has are not the pair bounding your own lane. Lane lines are noisy frame to frame — worse at night
+looks implausible (under ~1.5 m or over ~6 m — tested at both distances when the bend is decoupled); the
+position error left after that is beyond the plausibility row; or the lines it has are not the pair bounding
+your own lane. Note which quantity the bound tests: the *position error*, not the raw midpoint, so a corner
+no longer pushes the reading past the limit and silences the correction in exactly the bends it exists for.
+Lane lines are noisy frame to frame — worse at night
 — so the offset is low-passed and its rate of change is capped, which is what keeps the injected
 correction from being felt as a twitch of the wheel. After a brief dropout the last value is held for a
 moment **only while the car is going straight**: carrying a stale offset into a corner would steer toward
 where the lane used to be, so above the yaw-rate row it is discarded instead.
 
-**The rows.** As with the ACC rows, the box clamps every value into its range, and these ranges only allow
-the correction to get *gentler* than the code it is running — turning one up is a code change, not a
-slider. The app shows each row's live value.
+**The rows.** As with the ACC rows, the box clamps every value into its range. Most of these ranges only let
+the correction get *gentler* than the deployed code — giving it more authority is a code change, not a
+slider. Two are not like that: the lane/bend switch is a plain 0/1 toggle, and the position row is two-sided
+by nature, since either side of the lane centre is a legitimate place to sit. The app shows each row's live
+value.
 
-- **Correction gain** — overall strength of the extra curvature. The gentler direction is down, to 0.
-- **Lookahead (s)** — how far ahead (in time) the lane centre is measured; longer = smoother, less immediate.
-- **Minimum lookahead (m)** — the floor on that distance at low speed, so the arithmetic never divides by a
-  tiny L.
-- **Lane confidence needed** — how sure the model must be about *both* lines before any correction is used.
-  Raise it to make the correction act less often.
-- **Maximum offset (m)** — the plausibility limit on the lane-centre offset; beyond it the reading is
-  treated as a mis-detection rather than a real error.
+- **Work on the lane, not on the bend (0/1)** — 1 (shipped) subtracts the lane's own curvature at the doubled
+  lookahead, so the correction acts on *where you sit* in the lane rather than on the bend. 0 is the plain
+  request, which counts the bend a second time: that is the setting that made the car turn in early and hold
+  its line through corners.
+- **Where to sit in the lane (m, + = right of centre)** — the position to hold within your lane, −0.30 to
+  +0.30 m. Live: it is read continuously, so it can be trimmed while driving (− moves you left). It adds to
+  *Path Skew Offset* in Device Settings, and is spent from the correction's lateral budget, so a large value
+  leaves less authority to hold the position.
+- **Correction gain** — overall strength of the extra curvature. The gentler direction is down, to 0 (which is
+  stock behaviour).
+- **Correction lookahead (s)** — how far ahead (in time) the lane centre is measured; longer = smoother, less
+  immediate. This is also the `L` in the arithmetic above, so it sets how strongly an offset converts into
+  curvature.
 - **Maximum extra lateral acceleration (m/s²)** — the gentle-at-speed budget above. Lower = less authority.
-- **Correction active above (m/s)** — the speed below which it does nothing, for town driving.
-- **Filter time constant (s)** — how long it averages the lane offset over. Longer = smoother but slower;
-  0 means act on every frame raw.
-- **Maximum change rate** — how fast the correction itself may change (the anti-jerk cap). Lower = gentler.
-- **Memory hold (s)** — how long a good offset survives a brief dropout, and only while going straight.
-- **Memory yaw-rate limit (rad/s)** — above this rate of turning, a remembered offset is never trusted.
+- **Maximum lane-centre offset (m)** — the plausibility limit, tested on the position error *after* the bend's
+  curvature has been removed. Lower = stricter.
+- **Offset filter time constant (s)** — how long it averages the lane offset over. Longer = smoother but
+  slower; 0 means act on every frame raw.
+- **Rate limit on the correction (m/s² per s)** — how fast the correction itself may change (the anti-jerk
+  cap). Lower = gentler; 0 means unlimited, as in the code.
+- **Minimum lane-line probability** — how sure the model must be about *both* lines before any correction is
+  used. Raise it to make the correction act less often.
+- **Minimum speed (m/s)** — the speed below which it does nothing, for town driving. Raise only.
+- **Memory hold after a dropout (s)** — how long a good offset survives a brief dropout, and only while going
+  straight.
+- **Yaw-rate limit for a held offset (rad/s)** — above this rate of turning, a remembered offset is never
+  trusted. Tighter only.
 
 ## The Lane view page
 
@@ -229,5 +257,9 @@ Rows the box writes itself, plus settings with side effects beyond a value.
   each time the screen is read. Nothing is cached, so the numbers move between refreshes (they hop by the
   sensor's own ~0.9 °C step). The SoC starts throttling at its first trip point (75 °C); "Thermal state"
   says how far away that is, or warns when it is throttling right now.
+- **Path Skew Offset** — lateral bias of the model's own path, ±0.25 m in 0.05 m steps. `modeld` reads it once
+  at startup, so it takes effect from the next drive rather than the moment you set it. It is the same idea as
+  *Where to sit in the lane* above, and the two **add up** — that one applies within a second, this one at the
+  next drive.
 - **Reset calibration** — clears the stored camera calibration; it re-learns as you drive. Parked only.
 - **Reboot** — reboots the box; refused while autodrive is armed.
