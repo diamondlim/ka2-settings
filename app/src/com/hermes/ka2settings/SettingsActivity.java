@@ -1027,20 +1027,8 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
     private LinearLayout logsList;
     private boolean logsRequested;
     /**
-     * How many children of the log page are its fixed header (the intro, the record control and its
-     * note). The drive rows start after them, and pruning must start there too: removing everything
-     * past the first child deleted the record button the moment the list arrived.
      */
     private int logsHeaderCount;
-    private Track track;                     // the phone's own recording, while the app is running
-    private boolean autoRecord = true;        // start when the car moves, stop when it stops
-    private boolean manualStop;               // a hand-stopped recording does not restart itself
-    private long belowStopSince;              // when the speed last dropped under the stop threshold
-    private Button autoButton;
-    private Button recordButton;
-    private TextView recordNote;
-    private long lastUploadMs;
-    private static final int ASK_LOCATION = 4711;
 
     private LinearLayout buildTabBar() {
         LinearLayout linearLayout = new LinearLayout(this);
@@ -1248,42 +1236,13 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
         textView.setText("Recent drives come from the host archive - the whole history, whether or not "
                 + "the car is on - and from the box over Bluetooth when it is connected. Only drives that moved "
             + "are listed - the box logs continuously whenever it is powered, and a parked car reads zero.");
+        // A drive's position comes from the box's own GPS: openpilot logs gpsLocationExternal
+        // into every route, the host extracts it, and the map matches it to the drive by time.
+        // Nothing to record here any more - the phone is out of the loop.
         textView.setTextColor(this.MUTED);
         textView.setTextSize(13.0f);
         this.logsList.addView(textView);
 
-        // The box's own GPS has no satellite signal yet, so the phone is what puts a drive on the map:
-        // record while driving, and the track is matched to the drive by time.
-        this.recordButton = new Button(this);
-        this.recordButton.setText("Record my phone's track: off");
-        this.recordButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                toggleRecording();
-            }
-        });
-        LinearLayout.LayoutParams recordParams = new LinearLayout.LayoutParams(-2, -2);
-        recordParams.topMargin = dp(10.0f);
-        this.logsList.addView(this.recordButton, recordParams);
-
-        this.autoButton = new Button(this);
-        this.autoButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                autoRecord = !autoRecord;
-                manualStop = false;
-                updateRecordRow(null);
-                ensureTrack().sniff();
-            }
-        });
-        LinearLayout.LayoutParams autoParams = new LinearLayout.LayoutParams(-2, -2);
-        this.logsList.addView(this.autoButton, autoParams);
-
-        this.recordNote = new TextView(this);
-        this.recordNote.setTextColor(this.MUTED);
-        this.recordNote.setTextSize(12.0f);
-        this.recordNote.setText(TrackPolicy.describe(true, false));
-        this.logsList.addView(this.recordNote, new LinearLayout.LayoutParams(-1, -2));
         this.logsHeaderCount = this.logsList.getChildCount();      // everything above is header
         this.logsScroll.addView(this.logsList);
         android.view.ViewGroup viewGroup = (android.view.ViewGroup) this.settingsScroll.getParent();
@@ -1295,138 +1254,6 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
         this.logsScroll.setVisibility(8);
     }
 
-    /** The one recorder for this activity, watching for movement from the moment the page exists. */
-    private Track ensureTrack() {
-        if (this.track == null) {
-            this.track = new Track(this, new Track.Listener() {
-                @Override
-                public void onTrackChanged(int points, String note) {
-                    updateRecordRow(note);
-                    if (points > 0 && System.currentTimeMillis() - lastUploadMs > 120000L) {
-                        uploadTrack(false);
-                    }
-                }
-
-                @Override
-                public void onSpeed(double speedKph, boolean recording, boolean hasFix) {
-                    onSpeedSample(speedKph, recording, hasFix);
-                }
-            });
-        }
-        return this.track;
-    }
-
-    /**
-     * The automatic half: every fix decides whether to start or stop, using the thresholds in
-     * TrackPolicy. Runs on the main thread with the location callback, so no locking is needed.
-     */
-    private void onSpeedSample(double speedKph, boolean recording, boolean hasFix) {
-        if (!hasFix || speedKph < 0) {
-            return;
-        }
-        long now = System.currentTimeMillis();
-        if (speedKph < TrackPolicy.STOP_KPH) {
-            if (this.belowStopSince == 0L) {
-                this.belowStopSince = now;
-            }
-        } else {
-            this.belowStopSince = 0L;
-        }
-        long belowFor = this.belowStopSince == 0L ? 0L : now - this.belowStopSince;
-        TrackPolicy.Decision decision =
-            TrackPolicy.decide(this.autoRecord, recording, this.manualStop, speedKph, belowFor);
-        if (decision == TrackPolicy.Decision.START) {
-            ensureTrack().start();                     // permission is checked before sniffing ever starts
-            updateRecordRow(null);
-        } else if (decision == TrackPolicy.Decision.STOP && this.track != null) {
-            this.track.stop();                         // an automatic stop, so the next drive starts itself
-            uploadTrack(true);
-            updateRecordRow("Stopped after " + (TrackPolicy.STOP_AFTER_MS / 60000L)
-                + " minutes stopped; it will start again when you move.");
-        }
-    }
-
-    /** Start or stop recording the phone's own position, by hand. */
-    private void toggleRecording() {
-        ensureTrack();
-        if (this.track.isRecording()) {
-            this.track.stop();
-            this.manualStop = true;                    // do not fight the driver: stay stopped
-            uploadTrack(true);
-            updateRecordRow(null);
-            return;
-        }
-        if (checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION)
-                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[] {android.Manifest.permission.ACCESS_FINE_LOCATION,
-                android.Manifest.permission.ACCESS_COARSE_LOCATION}, ASK_LOCATION);
-            return;
-        }
-        this.manualStop = false;
-        this.belowStopSince = 0L;
-        String why = this.track.start();
-        if (why != null) {
-            this.recordNote.setText(why);
-        } else {
-            updateRecordRow(null);
-        }
-    }
-
-    private void updateRecordRow(String note) {
-        if (this.recordButton == null || this.track == null) {
-            return;
-        }
-        boolean on = this.track.isRecording();
-        if (this.autoButton != null) {
-            this.autoButton.setText(this.autoRecord ? "Auto-record: on" : "Auto-record: off");
-        }
-        this.recordButton.setText(on
-            ? String.format("Record my phone's track: ON  (%d points)", this.track.size())
-            : String.format("Record my phone's track: off  (%d points kept)", this.track.size()));
-        if (note != null) {
-            this.recordNote.setText(note);
-        } else if (on) {
-            this.recordNote.setText("Recording. Uploaded every couple of minutes; tap again to stop and "
-                + "send the rest.");
-        } else if (this.track.size() > 0) {
-            this.recordNote.setText("Stopped. A drive overlapping this recording will now show it on the map.");
-        }
-    }
-
-    /** Send the recorded points to the host; the same start time overwrites, so a partial upload grows. */
-    private void uploadTrack(final boolean announce) {
-        if (this.track == null || this.track.size() < 2 || !Remote.configured(Remote.DEFAULT_BASE, Remote.DEFAULT_TOKEN)) {
-            return;
-        }
-        final java.util.List<double[]> points = new java.util.ArrayList<double[]>(this.track.points());
-        this.lastUploadMs = System.currentTimeMillis();
-        new Thread(new Runnable() {
-            public void run() {
-                String note;
-                try {
-                    String body = Remote.trackPayload(android.os.Build.MODEL, points);
-                    String reply = Remote.post(Remote.trackUrl(Remote.DEFAULT_BASE), Remote.DEFAULT_TOKEN,
-                        body, Remote.TIMEOUT_MS);
-                    note = String.format("Uploaded %d points.", points.size());
-                    if (reply != null && reply.contains("saved")) {
-                        note = note + " The drive will match it by time.";
-                    }
-                } catch (Exception exc) {
-                    note = "Upload failed: " + exc.getMessage();
-                }
-                final String message = note;
-                runOnUiThread(new Runnable() {
-                    public void run() {
-                        if (announce || recordNote != null) {
-                            recordNote.setText(message);
-                        }
-                    }
-                });
-            }
-        }).start();
-    }
-
-    /** One drive on a map, with the source selectable so the two can be compared later. */
     private void showDriveMap(final String route, final String source) {
         final android.widget.ImageView image = new android.widget.ImageView(this);
         image.setAdjustViewBounds(true);
@@ -1442,7 +1269,9 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
         column.addView(image);
         final LinearLayout buttons = new LinearLayout(this);
         buttons.setOrientation(0);
-        final String[] sources = {"auto", "phone", "box"};
+        // No "phone" choice: the app no longer records a track. The host still falls back to any
+        // track recorded before this version under "auto", so old drives keep their maps.
+        final String[] sources = {"auto", "box"};
         for (final String choice : sources) {
             Button button = new Button(this);
             button.setText(choice);
@@ -2311,19 +2140,6 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
             } else {
                 this.statusText.setText("Bluetooth denied - enable Nearby devices for KA2 Settings in Android settings, then reopen the app");
             }
-        } else if (i == ASK_LOCATION) {
-            // Recording the phone's own position, which is what puts a drive on the map today. Either
-            // grant is enough to try: precise is better, approximate still produces a real track.
-            boolean granted = false;
-            for (int result : iArr) {
-                granted = granted || result == android.content.pm.PackageManager.PERMISSION_GRANTED;
-            }
-            if (granted) {
-                toggleRecording();
-            } else if (this.recordNote != null) {
-                this.recordNote.setText("Location permission was refused, so no track can be recorded "
-                    + "(auto-record included). Grant it in Android settings for KA2 Settings.");
-            }
         }
     }
 
@@ -2406,13 +2222,6 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
     @Override // android.app.Activity
     protected void onResume() {
         super.onResume();
-        // Ask only once the permission exists: sniffing before that would either prompt out of context
-        // or fail silently, and the button is the honest place to ask.
-        if (checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION)
-                == android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            ensureTrack().sniff();
-            updateRecordRow(null);
-        }
     }
 
     @Override // android.app.Activity
@@ -2421,11 +2230,6 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
         BtSpp btSpp = this.bt;
         if (btSpp != null) {
             btSpp.close();
-        }
-        // Release the location stream with the activity: this recording is tied to the app being open,
-        // and pretending otherwise would need a foreground service the owner has not asked for.
-        if (this.track != null) {
-            this.track.shutdown();
         }
     }
 

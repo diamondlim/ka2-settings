@@ -10,7 +10,6 @@ import com.hermes.ka2settings.States;
 import com.hermes.ka2settings.ScreenOn;
 import com.hermes.ka2settings.Wifi;
 import com.hermes.ka2settings.Drives;
-import com.hermes.ka2settings.TrackPolicy;
 import com.hermes.ka2settings.Remote;
 import com.hermes.ka2settings.Lens;
 
@@ -1150,27 +1149,16 @@ public class ClientParseTest {
       System.exit(1);
     }
 
-    // ---- the map and the phone's own track ---------------------------------------------------------
+    // ---- the map: the drive's position now comes from the box -----------------------------------------
     check("the map URL asks for the drive and the source",
-        Remote.mapUrl("https://drives.annovahome.com/", "2026-09-18--10-09-06", "phone")
-            .equals("https://drives.annovahome.com/map/2026-09-18--10-09-06.png?source=phone"),
-        Remote.mapUrl("https://drives.annovahome.com/", "2026-09-18--10-09-06", "phone"));
+        Remote.mapUrl("https://drives.annovahome.com/", "2026-09-18--10-09-06", "box")
+            .equals("https://drives.annovahome.com/map/2026-09-18--10-09-06.png?source=box"),
+        Remote.mapUrl("https://drives.annovahome.com/", "2026-09-18--10-09-06", "box"));
     check("...and defaults to auto when no source is given",
         Remote.mapUrl("https://x.y", "r", "").endsWith("?source=auto"), Remote.mapUrl("https://x.y", "r", ""));
-    check("the track upload URL is the track endpoint",
-        Remote.trackUrl("https://drives.annovahome.com/").equals("https://drives.annovahome.com/track"),
-        Remote.trackUrl("https://drives.annovahome.com/"));
 
-    java.util.List<double[]> recorded = new java.util.ArrayList<double[]>();
-    recorded.add(new double[] {1758000000000L, 1.5312, 110.3456, 8.5, 4.0});
-    recorded.add(new double[] {1758000001000L, 1.5313, 110.3457, 9.0, 5.0});
-    String body = Remote.trackPayload("phone", recorded);
-    check("the recorded track becomes the host's payload shape",
-        body.startsWith("{\"device\":\"phone\",\"points\":[[") && body.endsWith("]]}"), body);
-    check("...with epoch milliseconds kept whole, not rounded to a float",
-        body.contains("[1758000000000,1.5312,110.3456,8.5,4.0]"), body);
-
-    // what the host actually answered for a drive: a phone track present, the box's own absent
+    // what the host answered for a drive recorded before the box had its own GPS: a phone track present,
+    // the box's own absent. The app must still render that, and prefer the box once one exists.
     String hostTracked = "DRIVES {\"route\":\"2026-09-18--10-09-06\",\"started\":\"2026-09-18 18:09:06\","
         + "\"duration_s\":4080.2,\"frames\":407958,\"km\":77.23,\"segments\":68,\"segment_rows\":[],"
         + "\"track\":{\"phone\":{\"id\":\"x\",\"points\":820,\"km\":18.18,\"overlap_s\":819},"
@@ -1197,41 +1185,6 @@ public class ClientParseTest {
     check("a drive with no track at all says none, not zero points",
         "none for this drive".equals(untracked.get("Phone track")), untracked.get("Phone track"));
 
-    try {
-      java.io.FileWriter writer = new java.io.FileWriter("/tmp/track_payload.json");
-      writer.write(body);
-      writer.close();
-    } catch (Exception exc) {
-      check("the payload could be written for the live upload test", false, String.valueOf(exc));
-    }
-
-
-    // ---- auto-record: the decision, tested without a phone or a car ---------------------------------
-    check("standing still starts nothing",
-        TrackPolicy.decide(true, false, false, 0.0, 600000L) == TrackPolicy.Decision.HOLD, "0 km/h");
-    check("creeping in traffic does not start a recording",
-        TrackPolicy.decide(true, false, false, 8.0, 0L) == TrackPolicy.Decision.HOLD, "8 km/h");
-    check("driving starts one",
-        TrackPolicy.decide(true, false, false, 30.0, 0L) == TrackPolicy.Decision.START, "30 km/h");
-    check("no fix yet is not evidence of movement",
-        TrackPolicy.decide(true, false, false, -1.0, 0L) == TrackPolicy.Decision.HOLD, "no fix");
-    check("a red light does not end the recording",
-        TrackPolicy.decide(true, true, false, 0.0, 60000L) == TrackPolicy.Decision.HOLD, "1 min stopped");
-    check("but five minutes stopped does",
-        TrackPolicy.decide(true, true, false, 0.0, TrackPolicy.STOP_AFTER_MS) == TrackPolicy.Decision.STOP,
-        "5 min stopped");
-    check("a car crawling under the stop threshold still counts as stopped",
-        TrackPolicy.decide(true, true, false, 3.0, TrackPolicy.STOP_AFTER_MS) == TrackPolicy.Decision.STOP,
-        "3 km/h for 5 min");
-    check("a hand-stopped recording is not restarted under the driver",
-        TrackPolicy.decide(true, false, true, 60.0, 0L) == TrackPolicy.Decision.HOLD, "suppressed");
-    check("switching auto-record off stops it starting",
-        TrackPolicy.decide(false, false, false, 60.0, 0L) == TrackPolicy.Decision.HOLD, "auto off");
-    check("the note names both thresholds, so the behaviour is not a mystery",
-        TrackPolicy.describe(true, false).contains("12") && TrackPolicy.describe(true, false).contains("5"),
-        TrackPolicy.describe(true, false));
-    check("...and says when a manual stop paused it",
-        TrackPolicy.describe(true, true).contains("paused"), TrackPolicy.describe(true, true));
 
     System.out.println("all client parsing/geometry tests passed");
   }

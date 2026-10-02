@@ -105,41 +105,13 @@ public final class Remote {
     }
   }
 
-  /** Where a recorded track is delivered. */
-  public static String trackUrl(String base) {
-    return trim(base) + "/track";
-  }
-
   /**
-   * A map image for one drive. `source` is auto, phone or box - the selection is made per request, so
-   * the owner can compare sources for a drive without a rebuild.
+   * A map image for one drive. `source` is auto or box - the selection is made per request, so the
+   * owner can compare sources for a drive without a rebuild.
    */
   public static String mapUrl(String base, String route, String source) {
     return trim(base) + "/map/" + route + ".png?source="
         + (source == null || source.isEmpty() ? "auto" : source);
-  }
-
-  /**
-   * The upload body for a recorded track. Each point is [epoch_ms, lat, lon, speed, accuracy]; the host
-   * drops anything that is not a real fix, so this stays simple rather than clever.
-   */
-  public static String trackPayload(String device, java.util.List<double[]> points) {
-    StringBuilder out = new StringBuilder();
-    out.append("{\"device\":\"").append(device == null ? "phone" : device).append("\",\"points\":[");
-    boolean first = true;
-    for (double[] point : points) {
-      if (point == null || point.length < 3) {
-        continue;
-      }
-      if (!first) {
-        out.append(',');
-      }
-      first = false;
-      out.append('[').append((long) point[0]).append(',').append(point[1]).append(',').append(point[2])
-          .append(',').append(point.length > 3 ? point[3] : 0.0)
-          .append(',').append(point.length > 4 ? point[4] : 0.0).append(']');
-    }
-    return out.append("]}").toString();
   }
 
   /** POST a JSON body; returns the reply, or throws with a reason worth showing. */

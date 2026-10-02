@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.hermes.ka2settings"
-    android:versionCode="59"
-    android:versionName="7.9">
+    android:versionCode="60"
+    android:versionName="7.10">
   <!-- The app updates itself from its own GitHub releases: the APK is downloaded, then handed to the
        system package installer as a content:// URI. -->
   <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
@@ -14,10 +14,10 @@
   <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
   <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
       android:usesPermissionFlags="neverForLocation"/>
-  <!-- The app records the phone's own track, so location must apply on every Android version. The
-       previous maxSdkVersion="30" (a leftover from the Bluetooth-scan-on-old-Android requirement) made
-       the permission undeclared on Android 12+, where requestPermissions then fails instantly with no
-       dialog at all. -->
+  <!-- NOT for recording a track any more: the app no longer does that (the box logs its own GPS and the
+       host extracts it). It stays because Android 11 and below require location for Bluetooth DISCOVERY,
+       and BtSpp still discovers the box when no address is saved - missingBluetoothPermissions() asks for
+       this before connecting on those versions, so removing it would break the Bluetooth link on the unit. -->
   <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
   <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
   <application android:label="KA2 Settings" android:icon="@mipmap/ic_launcher"
