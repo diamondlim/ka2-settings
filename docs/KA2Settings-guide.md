@@ -106,15 +106,16 @@ and the car's own ACC does the decelerating.
 | Auto-slow for bends (on/off) | Master switch. 0 = the bridge never moves the setpoint for a bend | 0–1 | 1 |
 | Auto-slow floor (km/h) | The lowest the setpoint will ever be walked down. Also the bound for the car-ahead policy | 30–90, 5 | 30 |
 | Auto-raise ceiling (km/h) | Never hands speed back above this, nor above what you set yourself | 60–130, 5 | 130 |
-| Max auto-slow steps per bend | How much may be taken off for one bend: 4 = 20 km/h | 0–6, 1 | 4 |
-| Seconds between auto-slow steps | The cadence: how long it waits between steps down, and between steps back up. Longer = gentler. 2.5 s is the fastest the car tolerates | 2.5–15, 0.5 | 2.5 |
-| Start slowing this long before a bend | How early the first step is taken | 1–8 s, 0.5 | 6 |
+| Max auto-slow steps per bend | How much may be taken off for one bend: 6 = 30 km/h | 0–6, 1 | 6 |
+| Seconds between auto-slow steps | The cadence for slowing: how long it waits between steps down. Longer = gentler. 2.5 s is the fastest the car tolerates | 2.5–15, 0.5 | 5 |
+| Seconds between auto speed increase steps | The cadence for handing speed back, kept separate from the slow-down one so you can slow gently and still recover quickly. A step back up is never taken within 2.5 s of a step down, however this is set: that reversal was what made the setpoint flicker. At 1 s the three steps that put 15 km/h back are done about two seconds after the road clears; at 15 s it is barely noticeable | 1–15, 0.5 | 5 |
+| Start slowing this long before a bend | How early the first step is taken | 1–8 s, 0.5 | 8 |
 | How far ahead to look for bends | How much of the model's path is scanned | 80–320 m, 10 | 200 |
-| Bend comfort (m/s² lateral) | How much cornering force it allows: comfort speed = sqrt(A_LAT / curvature). Lower = slower in bends | 1.2–2.5, 0.1 | 1.2 |
+| Bend comfort (m/s² lateral) | How much cornering force it allows: comfort speed = sqrt(A_LAT / curvature). Lower = slower in bends | 1.2–2.5, 0.1 | 1.5 |
 | Ignore bends gentler than this radius | Wider bends produce no slowing at all — the way to leave gentle motorway curves alone | 250–600 m, 25 | 250 |
 | Don't auto-slow below this speed | Below this, bends are yours — useful in town | 25–70, 5 | 25 |
-| Only slow if the bend needs this much less | How far under your setpoint the bend must be before it acts: kills small nuisance steps | 5–20, 1 | 5 |
-| Speed-back headroom | How much faster the road must allow before a step back up | 5–25, 1 | 10 |
+| Only slow if the bend needs this much less | How far under your setpoint the bend must be before it acts: kills small nuisance steps | 5–20, 1 | 15 |
+| Speed-back headroom | How much faster the road must allow before a step back up | 5–25, 1 | 25 |
 | Hand the speed back after a bend (on/off) | 0 = it only ever slows; you raise the speed yourself. The clean way to stop the automatic raising | 0–1 | 1 |
 
 ## Car ahead — the `VIS_LEAD_ACC_*` rows
@@ -238,6 +239,11 @@ Under it, live numbers pulled from the same stream:
 - **lanes shown / predicted route** — how many lanes the model is reporting, and the fork's predicted path.
 - **your car's ACC / ACC requesting** — the car's own ACC state, and what the box last asked it for. If the
   automatic slowing is running, this is where you see it ask.
+- **GPS / GPS position** — the box's own GNSS state: whether it has a fix, how many satellites it is using,
+  and where the box puts the car. With no fix it says so and repeats the box's own reason ("12 of 14
+  satellites report signal" is a car under cover; "GNSS publisher not running" is the box's service being
+  down), and it shows **no coordinate at all** rather than the last one it had — a parked car's position
+  left on screen looks exactly like a fix.
 
 ## The Logs page
 

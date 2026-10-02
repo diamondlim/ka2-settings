@@ -29,7 +29,7 @@ import java.util.Map;
 
 /* JADX INFO: loaded from: classes.dex */
 public class SettingsActivity extends Activity implements BtSpp.Listener {
-    private static final String APP_VERSION = "7.8";
+    private static final String APP_VERSION = "7.12";
     private static final String PREFS = "ka2settings";
     private static final String PREF_HEIGHT = "height_choice";
     private static final String PREF_LENS = "lens";
@@ -110,6 +110,10 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
     private final Map<String, TextView> laneStats = new LinkedHashMap();
     private boolean updatePose = true;
     private String lastPoseVerdict = "";
+    /** The newest GNSS state from the box, shown on the lane page beside the pose's own readouts. */
+    private LaneGeometry.Gps gps = new LaneGeometry.Gps();
+    /** The last pose drawn, so a GPS line that arrives between poses can refresh the panel. */
+    private LaneGeometry.Pose lastPose;
     private final Object poseGate = new Object();
     private final Readouts.Sink laneSink = new Readouts.Sink() { // from class: com.hermes.ka2settings.SettingsActivity.20
         @Override // com.hermes.ka2settings.Readouts.Sink
@@ -803,10 +807,29 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
         }
     }
 
+    private void queueGps(final String str) {
+        // The GPS line rides the same stream as the pose but arrives about once a second, so it needs no
+        // coalescing of its own: it is posted to the UI thread and applied there.
+        runOnUiThread(new Runnable() { // from class: com.hermes.ka2settings.SettingsActivity.12b
+            @Override // java.lang.Runnable
+            public void run() {
+                try {
+                    SettingsActivity.this.showGps(Json.parseObject(str));
+                } catch (Json.JsonException e) {
+                    SettingsActivity.this.appendLog("bad gps: " + e.getMessage());
+                }
+            }
+        });
+    }
+
     @Override // com.hermes.ka2settings.BtSpp.Listener
     public void onLine(final String str) {
         if (Drives.isDrives(str)) {
             showDrives(str);
+            return;
+        }
+        if (str.startsWith("G ")) {
+            queueGps(str.substring(2));
             return;
         }
         if (str.startsWith("P ")) {
@@ -897,6 +920,15 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
             }
             appendLog(countRows());
             return;
+        }
+        if (str.startsWith("G ")) {
+            try {
+                showGps(Json.parseObject(str.substring(2)));
+                return;
+            } catch (Json.JsonException e4) {
+                appendLog("bad gps: " + e4.getMessage());
+                return;
+            }
         }
         if (str.startsWith("P ")) {
             try {
@@ -1618,11 +1650,11 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
         LinearLayout.LayoutParams layoutParams5 = new LinearLayout.LayoutParams(-1, -2);
         layoutParams5.setMargins(0, dp(6.0f), 0, 0);
         this.sidePanel.addView(linearLayout8, layoutParams5);
-        String[][] strArr = {new String[]{"width", "Lane width"}, new String[]{"speed", "Speed"}, new String[]{"plan", "Model plan"}, new String[]{"lines", "Lane confidence"}, new String[]{"horizon", "Measured at"}, new String[]{"engaged", "Lane centring"}, new String[]{"age", "Pose age"}, new String[]{"lead", "Lead vehicle"}, new String[]{"lead2", "Lead 2"}, new String[]{"lanes", "Lanes shown"}, new String[]{"route", "Predicted route"}, new String[]{"drift", "Centring drift"}, new String[]{"acc", "Your car's ACC"}, new String[]{"acc_cmd", "ACC requesting"}};
+        String[][] strArr = {new String[]{"width", "Lane width"}, new String[]{"speed", "Speed"}, new String[]{"plan", "Model plan"}, new String[]{"lines", "Lane confidence"}, new String[]{"horizon", "Measured at"}, new String[]{"engaged", "Lane centring"}, new String[]{"age", "Pose age"}, new String[]{"lead", "Lead vehicle"}, new String[]{"lead2", "Lead 2"}, new String[]{"lanes", "Lanes shown"}, new String[]{"route", "Predicted route"}, new String[]{"drift", "Centring drift"}, new String[]{"acc", "Your car's ACC"}, new String[]{"acc_cmd", "ACC requesting"}, new String[]{"gps", "GPS"}, new String[]{"gps_pos", "GPS position"}};
         int i3 = 0;
         while (true) {
             float f = 2.0f;
-            if (i3 < 14) {
+            if (i3 < 16) {
                 LinearLayout linearLayout9 = new LinearLayout(this);
                 linearLayout9.setOrientation(i2);
                 linearLayout8.addView(linearLayout9);
@@ -1633,17 +1665,21 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
                     linearLayout10.setOrientation(i2);
                     linearLayout10.setGravity(16);
                     linearLayout10.setPadding(dp(4.0f), dp(f), dp(4.0f), dp(f));
-                    if (i5 < 14) {
+                    if (i5 < 16) {
+                        // The GPS rows carry a coordinate and a count, not a single word, so they are set
+                        // smaller than the rest: at the panel's width the alternative is a clipped row.
+                        boolean zGpsRow = strArr[i5][0].startsWith("gps");
+                        float fRow = zGpsRow ? 14.0f : 20.0f;
                         TextView textView6 = new TextView(this);
                         textView6.setText(strArr[i5][1]);
                         textView6.setTextColor(this.MUTED);
-                        textView6.setTextSize(20.0f);
+                        textView6.setTextSize(fRow);
                         textView6.setSingleLine(true);
                         linearLayout10.addView(textView6, new LinearLayout.LayoutParams(0, -2, 1.0f));
                         TextView textView7 = new TextView(this);
                         textView7.setText("-");
                         textView7.setTextColor(this.TEXT);
-                        textView7.setTextSize(20.0f);
+                        textView7.setTextSize(fRow);
                         textView7.setTypeface(Typeface.DEFAULT_BOLD);
                         textView7.setSingleLine(true);
                         linearLayout10.addView(textView7);
@@ -1726,13 +1762,26 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
     }
 
     /* JADX INFO: Access modifiers changed from: private */
+    public void showGps(Map<String, Object> map) {
+        // The panel is refreshed straight away rather than waiting for the next pose: the GPS row is the
+        // one thing on this page that answers "is the box seeing satellites at all", and a second of lag
+        // on a question like that is a second of guessing.
+        this.gps = LaneGeometry.gpsFromJson(map, System.currentTimeMillis() / 1000.0d);
+        LaneGeometry.Pose pose = this.lastPose;
+        if (pose != null) {
+            Readouts.fill(pose, this.gps, this.poseCache, lensName(), laneViewHalfWidthAt10m(), this.laneSink);
+        }
+    }
+
+    /* JADX INFO: Access modifiers changed from: private */
     public void showPose(Map<String, Object> map) {
         LaneGeometry.Pose poseFromJson = LaneGeometry.fromJson(map, System.currentTimeMillis() / 1000.0d);
+        this.lastPose = poseFromJson;
         this.lastSpeedMps = poseFromJson.displayedSpeed();
         this.lastPathReach = poseFromJson.pathReach;
         applyLens(poseFromJson.displayedSpeed());
         this.laneView.setPose(poseFromJson);
-        Readouts.fill(poseFromJson, this.poseCache, lensName(), laneViewHalfWidthAt10m(), this.laneSink);
+        Readouts.fill(poseFromJson, this.gps, this.poseCache, lensName(), laneViewHalfWidthAt10m(), this.laneSink);
         String str = (poseFromJson.ok ? "ok " : "none ") + poseFromJson.summary();
         if (!str.equals(this.lastPoseVerdict)) {
             this.lastPoseVerdict = str;

@@ -236,6 +236,89 @@ public final class LaneGeometry {
     return lead;
   }
 
+  /** A GNSS state older than this is not shown as a fix - the box's publisher writes about once a
+   *  second, so this only ever catches a publisher that has stopped or a link that has gone quiet. */
+  public static final double GPS_STALE_S = 15.0;
+
+  /** The box's own GNSS state, as the lane page shows it.
+   *
+   *  Nothing here is worked out on the phone: the box decides whether it has a fix and says why not.
+   *  The reason matters more than the fix does - "12 of 14 satellites report signal" is a car parked
+   *  under cover, while "GNSS publisher not running" is the box's service being down, and those want
+   *  different reactions from whoever is looking at the screen. The position is gated on `ok` for the
+   *  same reason a stale pose is: a coordinate left behind by a fix that has since been lost is a lie
+   *  that looks like data.
+   */
+  public static final class Gps {
+    public boolean ok;
+    public String why = "";
+    public String source = "";      // which publisher answered: "modem-at", or a serial bridge
+    public double age = -1.0;       // seconds since the publisher wrote it, -1 = not given
+    public double lat, lon, alt, hdop, bearing;
+    public int sats;
+    public boolean stale;           // the box said the state itself was too old to trust
+
+    public boolean hasFix() {
+      return ok && !stale && (lat != 0.0 || lon != 0.0);
+    }
+
+    /** The one-line verdict for the GPS row: what the box has, not what the phone wishes it had. */
+    public String summary() {
+      if (stale) {
+        return "not answering";
+      }
+      if (!ok) {
+        return sats > 0 ? String.format("no fix · %d sats", sats) : "no fix";
+      }
+      return String.format("fix · %d sats", sats);
+    }
+
+    /** The position, or a dash when there is no fix to place - never a coordinate from a lost fix. */
+    public String position() {
+      return hasFix() ? String.format("%.5f, %.5f", lat, lon) : "-";
+    }
+
+    /** The long form, for the caption: the box's own reason when there is none to show. */
+    public String detail() {
+      if (stale) {
+        return why.isEmpty() ? "no GNSS state" : why;
+      }
+      if (!ok) {
+        return why.isEmpty() ? "no fix" : why;
+      }
+      String where = hasFix() ? String.format(" at %.5f, %.5f", lat, lon) : "";
+      String hdop = this.hdop > 0.0 ? String.format(", HDOP %.1f", this.hdop) : "";
+      String ageText = age >= 0.0 ? String.format(", %.0f s ago", age) : "";
+      return String.format("%d sats%s%s%s", sats, hdop, ageText, where);
+    }
+  }
+
+  /** Parse one GPS line's JSON, applying the same staleness rule the box applies to a pose. */
+  public static Gps gpsFromJson(Map<String, Object> row, double nowSeconds) {
+    Gps gps = new Gps();
+    gps.ok = Json.bool(row, "ok", false);
+    gps.why = Json.str(row, "why", "");
+    gps.source = Json.str(row, "source", "");
+    gps.stale = Json.bool(row, "stale", false) || Json.intOr(row, "stale", 0) == 1;
+    double age = Json.num(row, "age", -1.0);
+    if (age < 0.0 && Json.num(row, "at", 0.0) > 0.0) {
+      age = nowSeconds - Json.num(row, "at", 0.0);      // a publisher's raw file, if one ever lands
+    }
+    gps.age = age;
+    gps.lat = Json.num(row, "lat", 0.0);
+    gps.lon = Json.num(row, "lon", 0.0);
+    gps.alt = Json.num(row, "alt", 0.0);
+    gps.hdop = Json.num(row, "hdop", 0.0);
+    gps.bearing = Json.num(row, "bearing", 0.0);
+    gps.sats = Json.intOr(row, "sats", 0);
+    if (gps.age > GPS_STALE_S) {                        // the link is up but this row is cold
+      gps.ok = false;
+      gps.stale = true;
+      gps.why = String.format("no fresh GNSS state (last was %.0f s ago)", gps.age);
+    }
+    return gps;
+  }
+
   public static Pose fromJson(Map<String, Object> row, double nowSeconds) {
     Pose pose = new Pose();
     pose.age = nowSeconds - Json.num(row, "t", 0.0);

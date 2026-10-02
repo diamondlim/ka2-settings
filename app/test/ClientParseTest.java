@@ -37,7 +37,7 @@ public class ClientParseTest {
   }
 
   public static void main(String[] args) throws Exception {
-    String capture = "/config/.hermes/apk/box/captured_lines.txt";
+    String capture = capturePath();
     List<String> infoLines = new ArrayList<String>();
     List<String> schemaRows = new ArrayList<String>();
     List<String> poseLines = new ArrayList<String>();
@@ -635,6 +635,9 @@ public class ClientParseTest {
       }
     };
     Readouts.Cache shown = new Readouts.Cache();
+    // The pose checks are not about GNSS: they pass the "nothing reported" state, which is
+    // also what a box with no publisher at all sends.
+    LaneGeometry.Gps noGps = new LaneGeometry.Gps();
 
     check("the set speed shown is the car's own, not the fork's normalised value",
         "set 50 km/h".equals(Readouts.setSpeed(13.89)) && "set 45 km/h".equals(Readouts.setSpeed(12.40)),
@@ -651,10 +654,10 @@ public class ClientParseTest {
         + "\"look\":40.0,\"eng\":1,\"age\":0.1}";
     LaneGeometry.Pose steady = LaneGeometry.fromJson(Json.parseObject(steadyJson), 1000.1);
     onScreen.clear();
-    Readouts.fill(steady, shown, "far", 3.3, sink);
+    Readouts.fill(steady, noGps, shown, "far", 3.3, sink);
     check("a first frame fills the page", onScreen.size() >= 10, "" + onScreen.size());
     onScreen.clear();
-    Readouts.fill(steady, shown, "far", 3.3, sink);
+    Readouts.fill(steady, noGps, shown, "far", 3.3, sink);
     check("the same frame again touches no view at all (this is the fix)", onScreen.isEmpty(),
         onScreen.toString());
 
@@ -663,14 +666,14 @@ public class ClientParseTest {
     LaneGeometry.Pose nudged = LaneGeometry.fromJson(
         Json.parseObject(json.replace("\"v\":16.44", "\"v\":16.46")), 1000.1);
     onScreen.clear();
-    Readouts.fill(nudged, shown, "far", 3.3, sink);
+    Readouts.fill(nudged, noGps, shown, "far", 3.3, sink);
     check("a change too small to see does not touch a view either", onScreen.isEmpty(),
         onScreen.toString());
 
     LaneGeometry.Pose faster = LaneGeometry.fromJson(
         Json.parseObject(json.replace("\"v\":16.44", "\"v\":20.0")), 1000.1);
     onScreen.clear();
-    Readouts.fill(faster, shown, "far", 3.3, sink);
+    Readouts.fill(faster, noGps, shown, "far", 3.3, sink);
     check("a change the driver can see updates only that row",
         onScreen.size() > 0 && onScreen.size() <= 3 && "72".equals(onScreen.get("speed")),
         onScreen.toString());
@@ -740,7 +743,7 @@ public class ClientParseTest {
     check("the reason says why, so the caption is not just 'no lane data'",
         faintPose.summary().contains("faint markings"), faintPose.summary());
     final java.util.Map<String, String> captioned = new java.util.HashMap<String, String>();
-    Readouts.fill(faintPose, new Readouts.Cache(), "far", 3.3, new Readouts.Sink() {
+    Readouts.fill(faintPose, noGps, new Readouts.Cache(), "far", 3.3, new Readouts.Sink() {
       public void put(String key, String value) {
         captioned.put(key, value);
       }
@@ -1186,10 +1189,84 @@ public class ClientParseTest {
         "none for this drive".equals(untracked.get("Phone track")), untracked.get("Phone track"));
 
 
+    // --- the GPS row, against lines captured from the deployed box ------------------------------
+    // Captured with the box's own loopback test port:  printf 'POSE 1\n' | nc 127.0.0.1 9911
+    // The one without a fix is the interesting one: the box says why, and the app must pass that on
+    // rather than draw a dash and leave the reader guessing.
+    String gpsFix = "{\"ok\":1,\"age\":0.2,\"lat\":2.3187724,\"lon\":111.882043,\"alt\":18.8,"
+        + "\"speed_ms\":0.0,\"bearing\":13.7,\"sats\":9,\"hdop\":0.5,\"source\":\"modem-at\"}";
+    String gpsNone = "{\"ok\":0,\"age\":13.6,\"source\":\"modem-at\","
+        + "\"why\":\"12 of 14 satellites report signal\"}";
+    String gpsCold = "{\"ok\":1,\"stale\":1,\"age\":31.0,\"lat\":2.31,\"lon\":111.88,\"sats\":9,"
+        + "\"why\":\"GNSS state is 31 s old\"}";
+    double gpsNow = System.currentTimeMillis() / 1000.0d;
+    LaneGeometry.Gps fixed = LaneGeometry.gpsFromJson(Json.parseObject(gpsFix), gpsNow);
+    check("gps: a fix reads as a fix, with its satellite count",
+        fixed.hasFix() && "fix · 9 sats".equals(fixed.summary()), fixed.summary());
+    check("gps: the position is the fix's own coordinate",
+        "2.31877, 111.88204".equals(fixed.position()), fixed.position());
+    check("gps: the caption carries the count, the HDOP and where",
+        fixed.detail().contains("HDOP 0.5") && fixed.detail().contains("2.31877"), fixed.detail());
+
+    LaneGeometry.Gps none = LaneGeometry.gpsFromJson(Json.parseObject(gpsNone), gpsNow);
+    check("gps: a box with no fix says so", !none.hasFix() && "no fix".equals(none.summary()),
+        none.summary());
+    check("gps: no fix shows no coordinate at all", "-".equals(none.position()), none.position());
+    check("gps: the box's own reason survives to the caption",
+        none.detail().contains("12 of 14 satellites report signal"), none.detail());
+
+    LaneGeometry.Gps cold = LaneGeometry.gpsFromJson(Json.parseObject(gpsCold), gpsNow);
+    check("gps: a state the box called stale is not drawn as a fix",
+        !cold.hasFix() && "not answering".equals(cold.summary()), cold.summary());
+
+    LaneGeometry.Gps absent = LaneGeometry.gpsFromJson(Json.parseObject("{}"), gpsNow);
+    check("gps: a box that reports nothing says nothing",
+        !absent.hasFix() && "-".equals(absent.position()) && "no fix".equals(absent.summary()),
+        absent.summary());
+
+    final java.util.Map<String, String> gpsRows = new java.util.LinkedHashMap<String, String>();
+    Readouts.fill(new LaneGeometry.Pose(), fixed, new Readouts.Cache(), "far", 3.3,
+        new Readouts.Sink() {
+          public void put(String key, String value) {
+            gpsRows.put(key, value);
+          }
+        });
+    check("gps: the state row reaches the lane page's panel",
+        "fix · 9 sats".equals(gpsRows.get("gps")), String.valueOf(gpsRows.get("gps")));
+    check("gps: the position row reaches the lane page's panel",
+        "2.31877, 111.88204".equals(gpsRows.get("gps_pos")), String.valueOf(gpsRows.get("gps_pos")));
+    check("gps: the caption names the GNSS state too",
+        gpsRows.get("caption") != null && gpsRows.get("caption").contains("GPS 9 sats"),
+        String.valueOf(gpsRows.get("caption")));
+
     System.out.println("all client parsing/geometry tests passed");
   }
 
   /** True when the summary carries this label. */
+  /** Where the captured box output lives.
+   *
+   *  This used to be one machine's absolute path, which made the gate unrunnable anywhere else - and a
+   *  gate that cannot run is not a gate. The capture sits beside the repo when it is kept with the box
+   *  sources, and `KA2_CAPTURE` overrides both for a one-off run.
+   */
+  private static String capturePath() {
+    String override = System.getenv("KA2_CAPTURE");
+    if (override != null && !override.trim().isEmpty()) {
+      return override.trim();
+    }
+    String[] candidates = {
+        "box/captured_lines.txt",
+        System.getProperty("user.home") + "/.hermes/apk/box/captured_lines.txt",
+        "/config/.hermes/apk/box/captured_lines.txt",
+    };
+    for (String path : candidates) {
+      if (Files.exists(Paths.get(path))) {
+        return path;
+      }
+    }
+    return candidates[0];
+  }
+
   private static boolean hasLabel(java.util.List<String[]> pairs, String label) {
     for (String[] pair : pairs) {
       if (label.equals(pair[0])) {

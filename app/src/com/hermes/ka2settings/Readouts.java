@@ -111,15 +111,26 @@ public final class Readouts {
                     : String.format("%.0f m", lead.distance);
   }
 
+  /** The GPS row: the box's own GNSS verdict, in as few words as fit the panel. */
+  public static String gpsState(LaneGeometry.Gps gps) {
+    return gps == null ? "-" : gps.summary();
+  }
+
+  /** The position row, which is only ever a real fix - a stale coordinate is not shown as one. */
+  public static String gpsPosition(LaneGeometry.Gps gps) {
+    return gps == null ? "-" : gps.position();
+  }
+
   /** Everything the lane page shows, keyed by the view it belongs to. */
-  public static void fill(LaneGeometry.Pose pose, Cache cache, String lens, double halfWidthAt10m,
-      Sink sink) {
+  public static void fill(LaneGeometry.Pose pose, LaneGeometry.Gps gps, Cache cache, String lens,
+      double halfWidthAt10m, Sink sink) {
     put(cache, sink, "speed", pose.ok || pose.displayedSpeed() > 0.05
         ? speed(pose.displayedSpeed()) : "-");
     put(cache, sink, "set", setSpeed(pose.setSpeed));
     put(cache, sink, "caption", pose.summary()
         + (pose.predicted ? "  ·  drawn as the model's prediction, not a lane that was read" : "")
         + (pose.lead.present ? "  ·  lead: ACC tracking (vision)" : "")
+        + "  ·  GPS " + (gps == null ? "not reported" : gps.detail())
         + String.format("  ·  view %s, covers \u00b1%.0f m at 10 m", lens, halfWidthAt10m));
     put(cache, sink, "offset", pose.ok ? String.format("%+.2f m", pose.offset) : "-");
     put(cache, sink, "width", pose.ok ? String.format("%.2f m", pose.width) : "-");
@@ -141,6 +152,8 @@ public final class Readouts {
     put(cache, sink, "lead2", gapTo(pose.lead2, pose.speed));
     put(cache, sink, "drift", drift(pose));
     put(cache, sink, "route", routeReach(pose));
+    put(cache, sink, "gps", gpsState(gps));
+    put(cache, sink, "gps_pos", gpsPosition(gps));
     put(cache, sink, "acc", accState(pose));
     put(cache, sink, "acc_cmd", accRequest(pose));
     if (pose.ok && pose.age > LaneGeometry.POSE_STALE_S) {

@@ -1,7 +1,10 @@
-# build toolchain, fetched by setup_toolchain.sh
+# build toolchain, fetched by setup_toolchain.sh (and its symlinked form, which is how a
+# working copy points at a toolchain kept elsewhere on the machine)
 jdk/
+jdk
 jdk.tar.gz
 sdk/
+sdk
 cmdtools.zip
 
 # build output
