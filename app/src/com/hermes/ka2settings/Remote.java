@@ -33,7 +33,7 @@ public final class Remote {
    */
   public static final String DEFAULT_TOKEN = "BWyxYGEkThd9JZu13XeIGl2mHTidxttgUrxvn1ydq7s";
 
-  public static final int LIMIT = 60;          // drives per page; the host honours ?limit=
+  public static final int LIMIT = 20;          // drives per page: the newest twenty; the host honours ?limit=
   public static final int TIMEOUT_MS = 12000;
 
   private Remote() {

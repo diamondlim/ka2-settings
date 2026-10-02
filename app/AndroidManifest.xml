@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.hermes.ka2settings"
-    android:versionCode="63"
-    android:versionName="7.13">
+    android:versionCode="64"
+    android:versionName="7.14">
   <!-- The app updates itself from its own GitHub releases: the APK is downloaded, then handed to the
        system package installer as a content:// URI. -->
   <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>

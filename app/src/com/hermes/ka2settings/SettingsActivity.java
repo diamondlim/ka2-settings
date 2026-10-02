@@ -29,7 +29,7 @@ import java.util.Map;
 
 /* JADX INFO: loaded from: classes.dex */
 public class SettingsActivity extends Activity implements BtSpp.Listener {
-    private static final String APP_VERSION = "7.13";
+    private static final String APP_VERSION = "7.14";
     private static final String PREFS = "ka2settings";
     private static final String PREF_HEIGHT = "height_choice";
     private static final String PREF_LENS = "lens";
