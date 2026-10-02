@@ -29,7 +29,7 @@ import java.util.Map;
 
 /* JADX INFO: loaded from: classes.dex */
 public class SettingsActivity extends Activity implements BtSpp.Listener {
-    private static final String APP_VERSION = "7.12";
+    private static final String APP_VERSION = "7.13";
     private static final String PREFS = "ka2settings";
     private static final String PREF_HEIGHT = "height_choice";
     private static final String PREF_LENS = "lens";
@@ -825,7 +825,16 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
     @Override // com.hermes.ka2settings.BtSpp.Listener
     public void onLine(final String str) {
         if (Drives.isDrives(str)) {
-            showDrives(str);
+            // Lines arrive on the reader thread and this one builds views, so it has to hop to the UI
+            // thread like every other reply does. Without the hop, a drives list answered by the *box*
+            // died as CalledFromWrongThreadException - invisible while the host archive answered first,
+            // and then the crash the owner saw the moment that path went down.
+            runOnUiThread(new Runnable() { // from class: com.hermes.ka2settings.SettingsActivity.11b
+                @Override // java.lang.Runnable
+                public void run() {
+                    SettingsActivity.this.showDrives(str);
+                }
+            });
             return;
         }
         if (str.startsWith("G ")) {
