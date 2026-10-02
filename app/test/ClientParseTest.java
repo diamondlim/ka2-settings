@@ -1108,7 +1108,7 @@ public class ClientParseTest {
         hasLabel(Drives.summary(boxSummaryLine()), "Lanes usable"), "regression");
 
     check("the host URL is built for the row shape the app reads",
-        Remote.listUrl("https://drives.annovahome.com/").endsWith("/drives?format=legacy&limit=60"),
+        Remote.listUrl("https://drives.annovahome.com/").endsWith("/drives?format=legacy&limit=20"),
         Remote.listUrl("https://drives.annovahome.com/"));
     check("a summary URL carries the route",
         Remote.summaryUrl("https://drives.annovahome.com", "2026-09-18--10-09-06").endsWith("/summary/2026-09-18--10-09-06"),
