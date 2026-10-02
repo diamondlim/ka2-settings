@@ -34,6 +34,18 @@ java -cp "$HERE/out/test:$HERE/sdk/platforms/android-34/android.jar" ClientParse
 say "build"
 ( cd "$HERE" && ./build.sh | tail -3 ) || exit 1
 
+# Android 11+ hides every package an app has not declared in <queries>: queryIntentActivities() then
+# answers empty on all devices, so Update.hasApkInstaller() reports "no APK installer" on phones that
+# have one and the app stops being able to update itself - silently, with no build or runtime error.
+# The declaration is the only thing standing between that and a working update, so the build asserts it.
+AAPT2="$HERE/sdk/build-tools/34.0.0/aapt2"
+if ! "$AAPT2" dump xmltree --file AndroidManifest.xml "$HERE/out/KA2Settings.apk" \
+     | grep -A6 "E: queries" | grep -q "application/vnd.android.package-archive"; then
+  echo "FAILED: the built manifest declares no <queries> for application/vnd.android.package-archive." >&2
+  echo "        Without it the update probe answers 'no installer' on every Android 11+ device." >&2
+  exit 1
+fi
+
 BADGING=$("$HERE/sdk/build-tools/34.0.0/aapt2" dump badging "$HERE/out/KA2Settings.apk")
 NAME=$(printf '%s' "$BADGING" | sed -n "s/.*versionName='\([^']*\)'.*/\1/p" | head -1)
 CODE=$(printf '%s' "$BADGING" | sed -n "s/.*versionCode='\([0-9]*\)'.*/\1/p" | head -1)

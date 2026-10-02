@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.hermes.ka2settings"
-    android:versionCode="60"
-    android:versionName="7.10">
+    android:versionCode="61"
+    android:versionName="7.11">
   <!-- The app updates itself from its own GitHub releases: the APK is downloaded, then handed to the
        system package installer as a content:// URI. -->
   <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
@@ -20,6 +20,17 @@
        this before connecting on those versions, so removing it would break the Bluetooth link on the unit. -->
   <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
   <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+  <!-- What the app is allowed to SEE: on Android 11+ (enforced for anything targeting 30+) an app can
+       only see packages it declares here, and queryIntentActivities() silently returns an empty list for
+       the rest. Without this the installer probe in Update.hasApkInstaller() reports "no APK installer"
+       on phones that have one, and the app refuses to update itself. It asks about the package-archive
+       VIEW intent because that is exactly what the handoff uses. -->
+  <queries>
+    <intent>
+      <action android:name="android.intent.action.VIEW"/>
+      <data android:mimeType="application/vnd.android.package-archive"/>
+    </intent>
+  </queries>
   <application android:label="KA2 Settings" android:icon="@mipmap/ic_launcher"
       android:allowBackup="false"
       android:theme="@android:style/Theme.Material.NoActionBar">

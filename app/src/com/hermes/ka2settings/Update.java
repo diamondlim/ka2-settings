@@ -272,9 +272,14 @@ public final class Update {
      */
     static boolean hasApkInstaller(Context c) {
         try {
+            // Probed with the app's own content:// URI rather than file://, because that is what the
+            // handoff actually sends: a device that answers for this answers for the real thing.
             Intent probe = new Intent(Intent.ACTION_VIEW);
-            probe.setDataAndType(Uri.fromFile(new File(c.getCacheDir(), "probe.apk")),
+            probe.setDataAndType(ApkProvider.uriFor(c, new File(c.getCacheDir(), "probe.apk")),
                     "application/vnd.android.package-archive");
+            // The manifest's <queries> block is what makes this answer at all on Android 11+. Without it
+            // queryIntentActivities() returns an empty list on every device - phones included - and this
+            // method then reports "no APK installer" for hardware that installs APKs perfectly well.
             return !c.getPackageManager().queryIntentActivities(probe, 0).isEmpty();
         } catch (Exception e) {
             return true;
