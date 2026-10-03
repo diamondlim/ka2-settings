@@ -36,6 +36,19 @@ public final class Remote {
   public static final int LIMIT = 20;          // drives per page: the newest twenty; the host honours ?limit=
   public static final int TIMEOUT_MS = 12000;
 
+  /**
+   * The same API as the NAS serves it on the home LAN - same endpoints, same bearer token, no
+   * Cloudflare in the path. This is the machine that actually holds the logs (the box uploads to it
+   * over SMB), so at home this base is the shortest possible route to them.
+   */
+  public static final String LAN_BASE = "http://10.0.1.243:8791";
+
+  /** How long the LAN attempt may take. The NAS answers in milliseconds when it is there at all. */
+  public static final int LAN_TIMEOUT_MS = 2500;
+
+  /** Which source answered last, for the log page to name: the NAS on the LAN, or the host archive. */
+  public static volatile String lastSource = "";
+
   private Remote() {
   }
 
@@ -53,14 +66,85 @@ public final class Remote {
     return b;
   }
 
+  /** The request paths, so one call can be aimed at whichever base answers. */
+  public static String listPath() {
+    return "/drives?format=legacy&limit=" + LIMIT;
+  }
+
+  /** One drive's summary path; `route` is what the list row carried back. */
+  public static String summaryPath(String route) {
+    return "/summary/" + route;
+  }
+
   /** The drive list, in the row shape the box has always used (`format=legacy`). */
   public static String listUrl(String base) {
-    return trim(base) + "/drives?format=legacy&limit=" + LIMIT;
+    return trim(base) + listPath();
   }
 
   /** One drive's summary; `route` is what the list row carried back. */
   public static String summaryUrl(String base, String route) {
-    return trim(base) + "/summary/" + route;
+    return trim(base) + summaryPath(route);
+  }
+
+  /**
+   * The bases to try, in order: the NAS first (it holds the logs and is one hop away at home), then
+   * the published host, which answers from anywhere including when the car and the NAS are off. One
+   * entry when there is nothing to choose between them.
+   */
+  public static String[] candidates(String base) {
+    String b = trim(base);
+    String lan = trim(LAN_BASE);
+    if (lan.isEmpty() || lan.equals(b)) {
+      return new String[] { b };
+    }
+    return new String[] { lan, b };
+  }
+
+  /** A short name for whichever base answered, for the log page to show. */
+  public static String sourceLabel(String base) {
+    return trim(LAN_BASE).equals(trim(base)) ? "the NAS on your home LAN" : "the host archive";
+  }
+
+  /**
+   * GET `path` from the first base that answers, with the LAN attempt on the short timeout so a
+   * phone away from home is not left waiting on an address it cannot reach. The failure reported is
+   * the published host's, because that is the one that is supposed to work.
+   */
+  public static String fetchPath(String[] bases, String path, String token) throws Exception {
+    Exception last = null;
+    for (int i = 0; i < bases.length; i++) {
+      if (bases[i] == null || bases[i].isEmpty()) {
+        continue;
+      }
+      try {
+        String body = fetch(bases[i] + path, token,
+            i == 0 && bases.length > 1 ? LAN_TIMEOUT_MS : TIMEOUT_MS);
+        lastSource = sourceLabel(bases[i]);
+        return body;
+      } catch (Exception exc) {
+        last = exc;
+      }
+    }
+    throw last == null ? new IllegalStateException("no host configured") : last;
+  }
+
+  /** The same, for one image (the map). */
+  public static byte[] fetchBytesPath(String[] bases, String path, String token, int timeoutMs)
+      throws Exception {
+    Exception last = null;
+    for (int i = 0; i < bases.length; i++) {
+      if (bases[i] == null || bases[i].isEmpty()) {
+        continue;
+      }
+      try {
+        byte[] out = fetchBytes(bases[i] + path, token, timeoutMs);
+        lastSource = sourceLabel(bases[i]);
+        return out;
+      } catch (Exception exc) {
+        last = exc;
+      }
+    }
+    throw last == null ? new IllegalStateException("no host configured") : last;
   }
 
   /**
@@ -109,9 +193,12 @@ public final class Remote {
    * A map image for one drive. `source` is auto or box - the selection is made per request, so the
    * owner can compare sources for a drive without a rebuild.
    */
+  public static String mapPath(String route, String source) {
+    return "/map/" + route + ".png?source=" + (source == null || source.isEmpty() ? "auto" : source);
+  }
+
   public static String mapUrl(String base, String route, String source) {
-    return trim(base) + "/map/" + route + ".png?source="
-        + (source == null || source.isEmpty() ? "auto" : source);
+    return trim(base) + mapPath(route, source);
   }
 
   /** POST a JSON body; returns the reply, or throws with a reason worth showing. */

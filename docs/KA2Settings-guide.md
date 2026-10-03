@@ -253,6 +253,15 @@ autodrive is armed). It is the record of what you changed and when, for this ses
 own permanent audit log of the same exchanges, so nothing is lost when you close the app. The text is
 selectable, so you can copy a line out into a message.
 
+### Where the list of drives comes from
+
+The drives are served from an archive, not from the box's memory, so the list still works with the car
+off. At home the app asks the **NAS on your home LAN** first — the machine the box uploads its logs to,
+one hop away and with no Cloudflare in the path. Whenever the NAS does not answer (mobile data, or the
+NAS off) the app falls back to the published host, `drives.annovahome.com`, and the box over Bluetooth
+stays the last resort. The line under the heading names whichever answered, and a drive's own page and
+its map come from the same source as the list. Nothing to configure.
+
 ## DEVICE SETTINGS
 
 Rows the box writes itself, plus settings with side effects beyond a value.

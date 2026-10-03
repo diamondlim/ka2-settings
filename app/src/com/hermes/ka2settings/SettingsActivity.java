@@ -1067,6 +1067,8 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
     private ScrollView logsScroll;
     private LinearLayout logsList;
     private boolean logsRequested;
+    /** Names the archive that answered the last request: the NAS on the LAN, or the host archive. */
+    private TextView logsSource;
     /**
      */
     private int logsHeaderCount;
@@ -1284,6 +1286,16 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
         textView.setTextSize(13.0f);
         this.logsList.addView(textView);
 
+        // Which machine answered. At home that is the NAS itself (one hop, no Cloudflare); anywhere
+        // else the published host. Shown rather than implied: "where did this page come from" is
+        // exactly the question a slow or empty list raises.
+        this.logsSource = new TextView(this);
+        this.logsSource.setText("Log source: not asked yet.");
+        this.logsSource.setTextColor(this.MUTED);
+        this.logsSource.setTextSize(12.0f);
+        this.logsSource.setPadding(0, dp(2.0f), 0, dp(6.0f));
+        this.logsList.addView(this.logsSource);
+
         this.logsHeaderCount = this.logsList.getChildCount();      // everything above is header
         this.logsScroll.addView(this.logsList);
         android.view.ViewGroup viewGroup = (android.view.ViewGroup) this.settingsScroll.getParent();
@@ -1336,8 +1348,8 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
         new Thread(new Runnable() {
             public void run() {
                 try {
-                    byte[] png = Remote.fetchBytes(
-                        Remote.mapUrl(Remote.DEFAULT_BASE, route, source), Remote.DEFAULT_TOKEN, 45000);
+                    byte[] png = Remote.fetchBytesPath(Remote.candidates(Remote.DEFAULT_BASE),
+                        Remote.mapPath(route, source), Remote.DEFAULT_TOKEN, 45000);
                     final android.graphics.Bitmap bitmap =
                         android.graphics.BitmapFactory.decodeByteArray(png, 0, png.length);
                     runOnUiThread(new Runnable() {
@@ -1384,8 +1396,10 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
                 String body = null;
                 String why = null;
                 try {
-                    body = Remote.fetch(route == null ? Remote.listUrl(base) : Remote.summaryUrl(base, route),
-                        token, Remote.TIMEOUT_MS);
+                    // The NAS first (it holds the logs, and at home that is one hop), then the
+                    // published host - which is also what answers when the car and the NAS are off.
+                    body = Remote.fetchPath(Remote.candidates(base),
+                        route == null ? Remote.listPath() : Remote.summaryPath(route), token);
                 } catch (Exception exc) {
                     why = exc.getMessage();
                 }
@@ -1395,10 +1409,18 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
                     @Override // java.lang.Runnable
                     public void run() {
                         if (got != null) {
+                            if (SettingsActivity.this.logsSource != null) {
+                                String from = Remote.lastSource;
+                                SettingsActivity.this.logsSource.setText("Log source: "
+                                    + (from == null || from.isEmpty() ? "the host archive" : from));
+                            }
                             showDrives(Remote.toReply(got));
                             return;
                         }
                         appendLog("host drives unavailable (" + failed + ") - asking the box");
+                        if (SettingsActivity.this.logsSource != null) {
+                            SettingsActivity.this.logsSource.setText("Log source: the box over Bluetooth");
+                        }
                         if (SettingsActivity.this.bt != null) {
                             SettingsActivity.this.bt.send(route == null ? "DRIVES" : "DRIVES " + route);
                         }

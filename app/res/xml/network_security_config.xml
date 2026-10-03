@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The drive archive is served two ways: by the NAS on the home LAN, over plain HTTP (a 10.x address
+  has no certificate worth having), and by the published host over HTTPS. Cleartext stays off
+  everywhere else, so the only thing this app may talk to in the clear is the NAS itself.
+-->
+<network-security-config>
+  <base-config cleartextTrafficPermitted="false"/>
+  <domain-config cleartextTrafficPermitted="true">
+    <domain includeSubdomains="false">10.0.1.243</domain>
+  </domain-config>
+</network-security-config>

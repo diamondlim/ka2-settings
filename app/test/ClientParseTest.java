@@ -1146,6 +1146,24 @@ public class ClientParseTest {
     check("a short token is not treated as configured",
         !Remote.configured("https://x.y", "short") && Remote.configured("https://x.y", "0123456789012345678901"), "");
 
+    // ---- the LAN path: the same archive, fetched from the NAS that holds it ---------------------------
+    String[] order = Remote.candidates(Remote.DEFAULT_BASE);
+    check("the NAS on the LAN is tried before the published host",
+        order.length == 2 && order[0].equals(Remote.LAN_BASE)
+            && order[1].equals(Remote.DEFAULT_BASE), String.valueOf(order[0]));
+    check("...and nothing is fetched twice when the two are the same base",
+        Remote.candidates(Remote.LAN_BASE).length == 1, "same base");
+    check("the NAS base is plain HTTP on the LAN, which is what the cleartext rule allows",
+        Remote.LAN_BASE.startsWith("http://") && Remote.LAN_BASE.indexOf("10.0.1.243") > 0, Remote.LAN_BASE);
+    check("the source is named for the owner, not by URL",
+        Remote.sourceLabel(Remote.LAN_BASE).equals("the NAS on your home LAN")
+            && Remote.sourceLabel(Remote.DEFAULT_BASE).equals("the host archive"),
+        Remote.sourceLabel(Remote.DEFAULT_BASE));
+    check("the paths are the ones the archive serves, so both bases answer the same request",
+        Remote.listPath().equals("/drives?format=legacy&limit=" + Remote.LIMIT)
+            && Remote.summaryPath("r").equals("/summary/r")
+            && Remote.mapPath("r", "").equals("/map/r.png?source=auto"), Remote.listPath());
+
     System.out.println();
     if (!failures.isEmpty()) {
       System.out.println("FAILED: " + failures.size() + " -> " + failures);
