@@ -6,7 +6,7 @@ on the box really reads that setting.
 
 The app has three pages, switched by the bar at the top: **Settings** (this document), **Lane view** (what the model sees, drawn as a road) and **Logs** (what the box accepted). They share one live stream from the box, so the numbers on the Lane view and the rows in Settings are the same measurements.
 
-On the Settings page the ADAS rows sit under their own headings - **BEND AUTO-SLOW**, **CAR AHEAD**, **LANE CENTRING**, and **TUNING DEFAULTS** for the single override file they share - so the sections below match what you see on the phone, in that order. A heading appears only when the box actually reports rows for it.
+On the Settings page the ADAS rows sit under their own headings - **LANE CENTRING**, and **TUNING DEFAULTS** for the single override file they share - so the sections below match what you see on the phone, in that order. A heading appears only when the box actually reports rows for it, so the bend auto-slow and car-ahead headings are simply absent now: the box no longer offers their rows (the bridge that acted on them, ka2-vision-acc, is stopped and disabled).
 
 ## KA2 Settings (the update card)
 
@@ -73,7 +73,8 @@ Local to the phone; nothing is sent to the box.
 ## STOCK ACC
 
 - **Set speed → `ACC −` / `ACC +`** — sends one press of the car's own ACC setpoint buttons, immediately.
-  This is the same lever the automatic slowing uses. The box refuses while ACC is off, and it never touches
+  This is the car's own setpoint lever — the same one its rocker and the steering-wheel buttons drive — so a
+  press here and a press there do the same thing. The box refuses while ACC is off, and it never touches
   lane-keeping. 5 km/h per press, because that is what one press does on this car.
 
 ## CONNECTED DEVICE
@@ -91,49 +92,6 @@ status).
   box keeps its address on this network, so switching does not disconnect the app.
 - **Target branch, device APN, drive path offset** — updater and startup settings. They apply on the
   updater's next check or at the next boot, as the row says.
-
-## Bend auto-slow — the `VIS_TURN_ACC_*` rows
-
-*App section: BEND AUTO-SLOW.*
-
-This is the vision → stock-ACC bridge. It reads the model's view of the road, and when the road ahead
-demands less speed than you have set, it presses the setpoint down 5 km/h at a time and hands the speed
-back afterwards. **It never actuates the brakes** — on this car the setpoint is the only lever the box has,
-and the car's own ACC does the decelerating.
-
-| Row | What it does | Range / step | Current |
-|---|---|---|---|
-| Auto-slow for bends (on/off) | Master switch. 0 = the bridge never moves the setpoint for a bend | 0–1 | 1 |
-| Auto-slow floor (km/h) | The lowest the setpoint will ever be walked down. Also the bound for the car-ahead policy | 30–90, 5 | 30 |
-| Auto-raise ceiling (km/h) | Never hands speed back above this, nor above what you set yourself | 60–130, 5 | 130 |
-| Max auto-slow steps per bend | How much may be taken off for one bend: 6 = 30 km/h | 0–6, 1 | 6 |
-| Seconds between auto-slow steps | The cadence for slowing: how long it waits between steps down. Longer = gentler. 2.5 s is the fastest the car tolerates | 2.5–15, 0.5 | 5 |
-| Seconds between auto speed increase steps | The cadence for handing speed back, kept separate from the slow-down one so you can slow gently and still recover quickly. A step back up is never taken within 2.5 s of a step down, however this is set: that reversal was what made the setpoint flicker. At 1 s the three steps that put 15 km/h back are done about two seconds after the road clears; at 15 s it is barely noticeable | 1–15, 0.5 | 5 |
-| Start slowing this long before a bend | How early the first step is taken | 1–8 s, 0.5 | 8 |
-| How far ahead to look for bends | How much of the model's path is scanned | 80–320 m, 10 | 200 |
-| Bend comfort (m/s² lateral) | How much cornering force it allows: comfort speed = sqrt(A_LAT / curvature). Lower = slower in bends | 1.2–2.5, 0.1 | 1.5 |
-| Ignore bends gentler than this radius | Wider bends produce no slowing at all — the way to leave gentle motorway curves alone | 250–600 m, 25 | 250 |
-| Don't auto-slow below this speed | Below this, bends are yours — useful in town | 25–70, 5 | 25 |
-| Only slow if the bend needs this much less | How far under your setpoint the bend must be before it acts: kills small nuisance steps | 5–20, 1 | 15 |
-| Speed-back headroom | How much faster the road must allow before a step back up | 5–25, 1 | 25 |
-| Hand the speed back after a bend (on/off) | 0 = it only ever slows; you raise the speed yourself. The clean way to stop the automatic raising | 0–1 | 1 |
-
-## Car ahead — the `VIS_LEAD_ACC_*` rows
-
-*App section: CAR AHEAD.*
-
-The camera model also predicts the cars in front. Acting on that lets the box start slowing *before* the
-car's own ACC has resolved the car ahead, so the deceleration begins earlier and more gently. Same lever:
-setpoint only, the ACC still does the following. It takes the **lower** of the bend limit and the car-ahead
-limit, and it will never hand speed back while a slower car is still in front.
-
-| Row | What it does | Range / step | Current |
-|---|---|---|---|
-| Slow for a car ahead (on/off) | Master switch. Ships off | 0–1 | 1 |
-| How far ahead a car is acted on | Further than this is ignored | 60–200 m, 10 | 120 |
-| Aim this much faster than the car ahead | The setpoint walks toward that car's speed plus this | 0–20, 1 | 5 |
-| Confidence before a car counts as your lead | How sure the model must be. Raise it if anything spurious ever triggers a slow-down | 0.3–0.9, 0.05 | 0.5 |
-| Max steps per car ahead | How much may be taken off for one car: 4 = 20 km/h. Re-arms once that car is no longer in front | 0–8, 1 | 4 |
 
 ## How lane centring works — and what the `LANE_CORRECTION_*` rows change
 
@@ -221,10 +179,14 @@ value.
 A picture of what the box's model is seeing at that instant, drawn as a road rather than a diagram: the
 camera's real height and perspective are used, so the lane converges the way a road does.
 
-On it: your own lane's two lines, the lanes either side faintly, the model's planned-path ribbon, the car's
-position between the lines, and the lane centre the car computes. A dashed, faint line means the model
-carried that line on past where it actually stopped reading it. If there is no trustworthy pose it draws
-**no lane at all** and says why — an invented lane would be worse than an empty one.
+On it: the road surface, the lanes either side faintly, the model's planned-path ribbon, the car's position
+between the lines, and the lane centre the car computes. If there is no trustworthy pose it draws **no road
+at all** and says why — an invented lane would be worse than an empty one.
+
+The model's own lane lines used to be drawn on it and no longer are (removed 7 Oct 2026 at the owner's request):
+they were a synthetic overlay rather than a measurement, and the page reads better without them. The lane lines
+still *feed* the correction, so **lane confidence** and **measured at** below are still the model's numbers for them -
+they are just no longer painted on.
 
 Under it, live numbers pulled from the same stream:
 
@@ -235,10 +197,9 @@ Under it, live numbers pulled from the same stream:
 - **lane centring** — whether the box's lane keeping is actually engaged right now.
 - **centring drift** — how far off centre the car is, and which way: this is the number the correction
   above is working against, so it is the honest way to judge whether the correction is helping.
-- **lead vehicle / lead 2** — the cars ahead the model can see (this is what the car-ahead rows act on).
+- **lead vehicle / lead 2** — the cars ahead the model can see.
 - **lanes shown / predicted route** — how many lanes the model is reporting, and the fork's predicted path.
-- **your car's ACC / ACC requesting** — the car's own ACC state, and what the box last asked it for. If the
-  automatic slowing is running, this is where you see it ask.
+- **your car's ACC / ACC requesting** — the car's own ACC state, and what the box last asked it for.
 - **GPS / GPS position** — the box's own GNSS state: whether it has a fix, how many satellites it is using,
   and where the box puts the car. With no fix it says so and repeats the box's own reason ("12 of 14
   satellites report signal" is a car under cover; "GNSS publisher not running" is the box's service being

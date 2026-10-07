@@ -318,15 +318,12 @@ public class LaneView extends View {
     // car is in rather than as competitors for attention.
     fillNeighbourLane(canvas, camera, p.outerLeftX, p.outerLeftY, p.leftX, p.leftY, near);
     fillNeighbourLane(canvas, camera, p.rightX, p.rightY, p.outerRightX, p.outerRightY, near);
-    // On faint markings the box sends the lane the model predicts, marked as such: drawn broken and
-    // dimmed, so it reads as a prediction and never as a lane that was measured.
-    predictedEdgePaint.setColor(EDGE);
-    predictedEdgePaint.setAlpha(p.predicted ? 110 : 255);
-    Paint laneEdge = p.predicted ? predictedEdgePaint : edgePaint;
-    drawLaneLine(canvas, camera, p.leftX, p.leftY, near, laneEdge, p.predicted);
-    drawLaneLine(canvas, camera, p.rightX, p.rightY, near, laneEdge, p.predicted);
-    drawLaneLine(canvas, camera, p.outerLeftX, p.outerLeftY, near, outerEdgePaint, false);
-    drawLaneLine(canvas, camera, p.outerRightX, p.outerRightY, near, outerEdgePaint, false);
+    // The model's lane lines were drawn here: the two edges of the car's own lane (solid, or broken
+    // and dimmed when the box reports the lane as a prediction) and the two outer edges. Removed
+    // 7 Oct 2026 at the owner's request. What stays is the road, the centre dash, the car's own lane
+    // centre and its drift against it, the model's route and the leads - and the three helpers below
+    // (drawLaneLine, drawGuess, drawSegment) are left in place, unused, so putting the lines back is
+    // a matter of restoring these calls.
     drawCentreLine(canvas, camera, p, near);
   }
 
