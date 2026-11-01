@@ -253,6 +253,7 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
         scrollView.addView(linearLayout2);
         linearLayout.addView(scrollView, new LinearLayout.LayoutParams(-1, 0, 1.0f));
         linearLayout2.addView(buildUpdateCard());
+        linearLayout2.addView(buildHotspotCard());
         linearLayout2.addView(sectionHeader("APPEARANCE"));
         LinearLayout linearLayoutCard = card();
         LinearLayout linearLayout3 = new LinearLayout(this);
@@ -886,6 +887,41 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
     /* JADX INFO: Access modifiers changed from: private */
     public void handleLine(String str) {
         if (str.startsWith("#")) {
+            return;
+        }
+        if (str.startsWith("H ")) {
+            // Hotspot state: {"on":bool,"ssid":..,"ip":..,"clients":N,"iftype":"AP"|"STATION"}
+            try {
+                Map<String, Object> h = Json.parseObject(str.substring(2));
+                this.hotspotOn = Json.bool(h, "on", false);
+                String ip = Json.str(h, "ip", "");
+                String type = Json.str(h, "iftype", "");
+                int clients = Json.intOr(h, "clients", 0);
+                if (this.hotspotText != null) {
+                    this.hotspotText.setText(this.hotspotOn
+                            ? "hotspot on" + (ip.isEmpty() ? "" : " - " + ip) + " - " + clients + " clients"
+                            : "hotspot off (wlan0 " + (type.isEmpty() ? "idle" : type.toLowerCase()) + ")");
+                }
+                if (this.hotspotButton != null) {
+                    this.hotspotButton.setEnabled(true);
+                    this.hotspotButton.setText(this.hotspotOn ? "Turn hotspot off" : "Turn hotspot on");
+                }
+            } catch (Exception e) {
+                // not a hotspot status line: leave the card as it was
+            }
+            return;
+        }
+        if (str.contains("HOTSPOT")) {
+            // The box answers with what it actually did (and which address it got), so the toggle
+            // shows the state rather than the request.
+            this.hotspotOn = str.contains("HOTSPOT on") || str.contains("HOTSPOT status on");
+            if (this.hotspotText != null) {
+                this.hotspotText.setText(str.trim());
+            }
+            if (this.hotspotButton != null) {
+                this.hotspotButton.setEnabled(true);
+                this.hotspotButton.setText(this.hotspotOn ? "Turn hotspot off" : "Turn hotspot on");
+            }
             return;
         }
         if (str.startsWith("ACC ")) {
@@ -1830,6 +1866,45 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
         }
     }
 
+    private TextView hotspotText;
+    private Button hotspotButton;
+    private boolean hotspotOn;
+
+    /**
+     * Hotspot or Wi-Fi client. One radio, so it is one or the other: the box's wlan0 can be an AP or
+     * a station, never both, and the toggle reports which state it actually reached.
+     */
+    private LinearLayout buildHotspotCard() {
+        LinearLayout card = card();
+        TextView title = new TextView(this);
+        title.setText("HOTSPOT / WI-FI");
+        title.setTextColor(this.MUTED);
+        title.setTextSize(12.0f);
+        card.addView(title);
+
+        this.hotspotText = new TextView(this);
+        this.hotspotText.setText("checking...");
+        this.hotspotText.setTextColor(this.TEXT);
+        this.hotspotText.setTextSize(15.0f);
+        card.addView(this.hotspotText);
+
+        Button button = new Button(this);
+        this.hotspotButton = button;
+        button.setAllCaps(false);
+        button.setText("Turn hotspot on");
+        button.setOnClickListener(new android.view.View.OnClickListener() {
+            @Override
+            public void onClick(android.view.View v) {
+                SettingsActivity.this.sendCmd(SettingsActivity.this.hotspotOn ? "HOTSPOT OFF" : "HOTSPOT ON");
+                SettingsActivity.this.hotspotText.setText("switching...");
+                SettingsActivity.this.hotspotButton.setEnabled(false);
+                SettingsActivity.this.sendCmd("HOTSPOT STATUS");
+            }
+        });
+        card.addView(button);
+        return card;
+    }
+
     /* JADX INFO: Access modifiers changed from: private */
     public void showGps(Map<String, Object> map) {
         // The panel is refreshed straight away rather than waiting for the next pose: the GPS row is the
@@ -2277,6 +2352,7 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
                     settingsActivity.setDot(settingsActivity.WAIT);
                     SettingsActivity.this.sendCmd("STATE");
                     SettingsActivity.this.sendCmd("WIFI STATUS");
+                    SettingsActivity.this.sendCmd("HOTSPOT STATUS");
                     SettingsActivity settingsActivity2 = SettingsActivity.this;
                     settingsActivity2.setLaneDot(settingsActivity2.ACCENT);
                     SettingsActivity.this.connectButton.setText("Disconnect");
