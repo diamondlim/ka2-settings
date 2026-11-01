@@ -41,9 +41,10 @@ public final class Readouts {
     void put(String key, String value);
   }
 
-  /** The big number: whole km/h. */
+  /** The big number: whole km/h. Clamped at zero, because the box's speed can read a few cm/s
+   *  negative at a standstill and "%.0f" of that prints "-0", which reads like a fault. */
   public static String speed(double metresPerSecond) {
-    return String.format("%.0f", metresPerSecond * 3.6);
+    return String.format("%.0f", Math.max(0.0, metresPerSecond * 3.6));
   }
 
   /**
@@ -135,7 +136,7 @@ public final class Readouts {
     put(cache, sink, "offset", pose.ok ? String.format("%+.2f m", pose.offset) : "-");
     put(cache, sink, "width", pose.ok ? String.format("%.2f m", pose.width) : "-");
     put(cache, sink, "speed_row", pose.displayedSpeed() > 0.05
-        ? String.format("%.0f km/h", pose.displayedSpeed() * 3.6) : "-");
+        ? String.format("%.0f km/h", Math.max(0.0, pose.displayedSpeed() * 3.6)) : "-");
     // The model's plan is a path radius, not a distance ahead. A radius of kilometres means the road
     // is effectively straight, and printing "100000 m" made it look like a plan reaching 100 km.
     double planRadius = Math.abs(pose.curvature) > 1e-9 ? 1.0 / Math.abs(pose.curvature) : 1e9;

@@ -114,6 +114,35 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
     private LaneGeometry.Gps gps = new LaneGeometry.Gps();
     /** The last pose drawn, so a GPS line that arrives between poses can refresh the panel. */
     private LaneGeometry.Pose lastPose;
+    private long lastPoseAtMs;
+    private final android.os.Handler laneTick = new android.os.Handler(android.os.Looper.getMainLooper());
+
+    /**
+     * Re-evaluates the pose once a second, so a frozen stream cannot leave a number on screen that
+     * looks live: the pose age is only computed when a frame arrives, and when nothing arrives the
+     * page simply stops - which showed an old 0 km/h through a whole drive.
+     */
+    private final Runnable laneTickRun = new Runnable() {
+        @Override
+        public void run() {
+            LaneGeometry.Pose pose = SettingsActivity.this.lastPose;
+            if (pose != null) {
+                double age = (System.currentTimeMillis() - SettingsActivity.this.lastPoseAtMs) / 1000.0d;
+                pose.age = age;
+                if (age > LaneGeometry.POSE_STALE_S) {
+                    pose.ok = false;
+                    pose.why = String.format("no fresh pose (%.0f s ago)", Double.valueOf(age));
+                }
+                if (SettingsActivity.this.laneView != null) {
+                    SettingsActivity.this.laneView.setPose(pose);
+                }
+                Readouts.fill(pose, SettingsActivity.this.gps, SettingsActivity.this.poseCache,
+                        SettingsActivity.this.lensName(), SettingsActivity.this.laneViewHalfWidthAt10m(),
+                        SettingsActivity.this.laneSink);
+            }
+            SettingsActivity.this.laneTick.postDelayed(this, 1000L);
+        }
+    };
     private final Object poseGate = new Object();
     private final Readouts.Sink laneSink = new Readouts.Sink() { // from class: com.hermes.ka2settings.SettingsActivity.20
         @Override // com.hermes.ka2settings.Readouts.Sink
@@ -210,6 +239,7 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
     protected void onCreate(Bundle bundle) {
         super.onCreate(bundle);
         applyTheme();
+        this.laneTick.postDelayed(this.laneTickRun, 1000L);
         LinearLayout linearLayout = new LinearLayout(this);
         linearLayout.setOrientation(1);
         linearLayout.setBackgroundColor(this.BG);
@@ -289,7 +319,7 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
         accDown.setOnClickListener(new View.OnClickListener() { // from class: com.hermes.ka2settings.SettingsActivity.accDown
             @Override // android.view.View.OnClickListener
             public void onClick(View view) {
-                SettingsActivity.this.bt.send("ACC DOWN");
+                SettingsActivity.this.sendCmd("ACC DOWN");
             }
         });
         accRow.addView(accDown);
@@ -302,7 +332,7 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
         accUp.setOnClickListener(new View.OnClickListener() { // from class: com.hermes.ka2settings.SettingsActivity.accUp
             @Override // android.view.View.OnClickListener
             public void onClick(View view) {
-                SettingsActivity.this.bt.send("ACC UP");
+                SettingsActivity.this.sendCmd("ACC UP");
             }
         });
         accRow.addView(accUp);
@@ -420,10 +450,10 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
         button5.setOnClickListener(new View.OnClickListener() { // from class: com.hermes.ka2settings.SettingsActivity.6
             @Override // android.view.View.OnClickListener
             public void onClick(View view) {
-                SettingsActivity.this.bt.send("INFO");
-                SettingsActivity.this.bt.send("SCHEMA");
-                SettingsActivity.this.bt.send("STATE");
-                SettingsActivity.this.bt.send("WIFI STATUS");
+                SettingsActivity.this.sendCmd("INFO");
+                SettingsActivity.this.sendCmd("SCHEMA");
+                SettingsActivity.this.sendCmd("STATE");
+                SettingsActivity.this.sendCmd("WIFI STATUS");
             }
         });
         linearLayout2.addView(button5);
@@ -451,7 +481,7 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
                 SettingsActivity.this.wifiStatusText.setText("scanning...");
                 SettingsActivity.this.wifiNetworks.clear();
                 SettingsActivity.this.wifiCollecting = true;
-                SettingsActivity.this.bt.send("WIFI LIST");
+                SettingsActivity.this.sendCmd("WIFI LIST");
             }
         });
         linearLayoutCard3.addView(this.wifiButton);
@@ -552,7 +582,7 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
         }
         row.value = strPress;
         bindValue(row, strPress);
-        this.bt.send("SET " + row.key + " " + strPress);
+        this.sendCmd("SET " + row.key + " " + strPress);
         return true;
     }
 
@@ -586,7 +616,7 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
         negativeButton.setPositiveButton(lowerCase, new DialogInterface.OnClickListener() { // from class: com.hermes.ka2settings.SettingsActivity.9
             @Override // android.content.DialogInterface.OnClickListener
             public void onClick(DialogInterface dialogInterface, int i) {
-                SettingsActivity.this.bt.send("ACT " + str.replace("ACT_", ""));
+                SettingsActivity.this.sendCmd("ACT " + str.replace("ACT_", ""));
             }
         }).show();
     }
@@ -686,7 +716,7 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
     /* JADX INFO: Access modifiers changed from: private */
     public void connectWifi(Wifi.Network network, String str) {
         this.wifiStatusText.setText("joining " + network.ssid + "...");
-        this.bt.send(Wifi.connectCommand(network.ssid, str));
+        this.sendCmd(Wifi.connectCommand(network.ssid, str));
     }
 
     private LinearLayout card() {
@@ -880,12 +910,12 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
         if (str.startsWith("KA2 SETTINGS")) {
             Log.i(TAG, "box banner: " + str);
             appendLog("box: " + str);
-            this.bt.send("VER " + APP_VERSION);
-            this.bt.send("INFO");
-            this.bt.send("SCHEMA");
-            this.bt.send("ACC STATE");
+            this.sendCmd("VER " + APP_VERSION);
+            this.sendCmd("INFO");
+            this.sendCmd("SCHEMA");
+            this.sendCmd("ACC STATE");
             if (this.updatePose) {
-                this.bt.send("POSE 1");
+                this.sendCmd("POSE 1");
                 return;
             }
             return;
@@ -954,14 +984,14 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
                 this.wifiStatusText.setText("Wi-Fi: " + str.substring(4));
             }
             appendLog("box refused: " + str.substring(4));
-            this.bt.send("SCHEMA");
+            this.sendCmd("SCHEMA");
             return;
         }
         if (str.startsWith("OK ")) {
             Log.i(TAG, "box accepted: " + str.substring(3));
             if (str.substring(3).startsWith("WIFI ")) {
                 this.wifiStatusText.setText("connected - asking the box what it is on now");
-                this.bt.send("WIFI STATUS");
+                this.sendCmd("WIFI STATUS");
                 appendLog(str);
                 return;
             } else {
@@ -987,7 +1017,7 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
         }
         if (row.action != null) {
             appendLog("action acknowledged");
-            this.bt.send("SCHEMA");
+            this.sendCmd("SCHEMA");
             return;
         }
         String strSubstring = str.substring(iIndexOf2 + 1);
@@ -1386,7 +1416,7 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
         this.pendingRoute = route;
         if (!Remote.configured(base, token)) {
             if (this.bt != null) {
-                this.bt.send(route == null ? "DRIVES" : "DRIVES " + route);
+                this.sendCmd(route == null ? "DRIVES" : "DRIVES " + route);
             }
             return;
         }
@@ -1422,7 +1452,7 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
                             SettingsActivity.this.logsSource.setText("Log source: the box over Bluetooth");
                         }
                         if (SettingsActivity.this.bt != null) {
-                            SettingsActivity.this.bt.send(route == null ? "DRIVES" : "DRIVES " + route);
+                            SettingsActivity.this.sendCmd(route == null ? "DRIVES" : "DRIVES " + route);
                         }
                     }
                 });
@@ -1792,6 +1822,14 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
         }
     }
 
+    /** One send path, so the rest of the page never has to care how the link is built. */
+    private void sendCmd(String command) {
+        BtSpp b = this.bt;
+        if (b != null) {
+            b.send(command);
+        }
+    }
+
     /* JADX INFO: Access modifiers changed from: private */
     public void showGps(Map<String, Object> map) {
         // The panel is refreshed straight away rather than waiting for the next pose: the GPS row is the
@@ -1808,6 +1846,7 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
     public void showPose(Map<String, Object> map) {
         LaneGeometry.Pose poseFromJson = LaneGeometry.fromJson(map, System.currentTimeMillis() / 1000.0d);
         this.lastPose = poseFromJson;
+        this.lastPoseAtMs = System.currentTimeMillis();
         this.lastSpeedMps = poseFromJson.displayedSpeed();
         this.lastPathReach = poseFromJson.pathReach;
         applyLens(poseFromJson.displayedSpeed());
@@ -1975,7 +2014,7 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
                     if (row.suppressCallback) {
                         return;
                     }
-                    SettingsActivity.this.bt.send("SET " + row.key + " " + (z ? "1" : "0"));
+                    SettingsActivity.this.sendCmd("SET " + row.key + " " + (z ? "1" : "0"));
                 }
             });
             row.toggle = r0;
@@ -1999,7 +2038,7 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
                 button.setOnClickListener(new View.OnClickListener() { // from class: com.hermes.ka2settings.SettingsActivity.22
                     @Override // android.view.View.OnClickListener
                     public void onClick(View view) {
-                        SettingsActivity.this.bt.send("SET " + row.key + " " + optionIndex);
+                        SettingsActivity.this.sendCmd("SET " + row.key + " " + optionIndex);
                     }
                 });
                 LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(-2, -2);
@@ -2029,7 +2068,7 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
                     new AlertDialog.Builder(SettingsActivity.this).setTitle(str2).setItems(strArr, new DialogInterface.OnClickListener() { // from class: com.hermes.ka2settings.SettingsActivity.23.1
                         @Override // android.content.DialogInterface.OnClickListener
                         public void onClick(DialogInterface dialogInterface, int i5) {
-                            SettingsActivity.this.bt.send("SET " + row.key + " " + strArr[i5]);
+                            SettingsActivity.this.sendCmd("SET " + row.key + " " + strArr[i5]);
                         }
                     }).show();
                 }
@@ -2112,7 +2151,7 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
                 button4.setOnClickListener(new View.OnClickListener() { // from class: com.hermes.ka2settings.SettingsActivity.25
                     @Override // android.view.View.OnClickListener
                     public void onClick(View view) {
-                        SettingsActivity.this.bt.send("SET " + row.key + " " + row.field.getText().toString().trim());
+                        SettingsActivity.this.sendCmd("SET " + row.key + " " + row.field.getText().toString().trim());
                     }
                 });
                 linearLayout6.addView(editText);
@@ -2236,8 +2275,8 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
                     SettingsActivity.this.laneStatusText.setText(ScreenOn.CONNECTED);
                     SettingsActivity settingsActivity = SettingsActivity.this;
                     settingsActivity.setDot(settingsActivity.WAIT);
-                    SettingsActivity.this.bt.send("STATE");
-                    SettingsActivity.this.bt.send("WIFI STATUS");
+                    SettingsActivity.this.sendCmd("STATE");
+                    SettingsActivity.this.sendCmd("WIFI STATUS");
                     SettingsActivity settingsActivity2 = SettingsActivity.this;
                     settingsActivity2.setLaneDot(settingsActivity2.ACCENT);
                     SettingsActivity.this.connectButton.setText("Disconnect");

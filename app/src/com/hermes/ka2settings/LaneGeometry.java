@@ -195,7 +195,7 @@ public final class LaneGeometry {
       String horizon = fallback && carLook > 0
           ? String.format(" (at %.0f m - the lane is not visible at the car's %.0f m)", look, carLook)
           : "";
-      return String.format("%s - lane %.1f m - %.0f km/h%s%s", side, width, speed * 3.6,
+      return String.format("%s - lane %.1f m - %.0f km/h%s%s", side, width, Math.max(0.0, speed * 3.6),
                            engaged ? " - engaged" : "", horizon);
     }
   }
