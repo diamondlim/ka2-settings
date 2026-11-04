@@ -254,6 +254,7 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
         linearLayout.addView(scrollView, new LinearLayout.LayoutParams(-1, 0, 1.0f));
         linearLayout2.addView(buildUpdateCard());
         linearLayout2.addView(buildHotspotCard());
+        linearLayout2.addView(buildProfileCard());
         linearLayout2.addView(sectionHeader("APPEARANCE"));
         LinearLayout linearLayoutCard = card();
         LinearLayout linearLayout3 = new LinearLayout(this);
@@ -928,6 +929,10 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
             // The box answers with its own words: availability, engagement and set speed. Shown
             // verbatim so a refusal reason is visible instead of being paraphrased away.
             this.accStatus.setText(str.substring(4));
+            return;
+        }
+        if (str.startsWith("P ")) {
+            showProfile(str.substring(2));
             return;
         }
         if (str.startsWith("S ")) {
@@ -1869,6 +1874,7 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
     private TextView hotspotText;
     private Button hotspotButton;
     private boolean hotspotOn;
+    private TextView profileText;
 
     /**
      * Hotspot or Wi-Fi client. One radio, so it is one or the other: the box's wlan0 can be an AP or
@@ -1903,6 +1909,73 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
         });
         card.addView(button);
         return card;
+    }
+
+    /**
+     * Camera profiles, one per combination of light and weather. Switching reloads the IQ file,
+     * which restarts the camera: the box refuses unless the car is stationary, and the card says
+     * so instead of hiding the button and leaving the driver guessing why nothing happened.
+     */
+    private LinearLayout buildProfileCard() {
+        LinearLayout card = card();
+        TextView title = new TextView(this);
+        title.setText("CAMERA PROFILE");
+        title.setTextColor(this.MUTED);
+        title.setTextSize(12.0f);
+        card.addView(title);
+
+        this.profileText = new TextView(this);
+        this.profileText.setText("checking...");
+        this.profileText.setTextColor(this.TEXT);
+        this.profileText.setTextSize(14.0f);
+        card.addView(this.profileText);
+
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        String[][] defs = {
+                {"DAY_DRY", "Day dry"},
+                {"NIGHT_DRY", "Night dry"},
+                {"DAY_RAIN", "Day rain"},
+                {"NIGHT_RAIN", "Night rain"}};
+        for (String[] def : defs) {
+            final String key = def[0];
+            Button button = new Button(this);
+            button.setAllCaps(false);
+            button.setText(def[1]);
+            button.setTextSize(11.0f);
+            button.setOnClickListener(new android.view.View.OnClickListener() {
+                @Override
+                public void onClick(android.view.View v) {
+                    SettingsActivity.this.sendCmd("PROFILE " + key);
+                    SettingsActivity.this.profileText.setText("switching to " + key
+                            + " - camera restarts, so the car must be stopped");
+                }
+            });
+            row.addView(button, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f));
+        }
+        card.addView(row);
+        return card;
+    }
+
+    /* JADX INFO: Access modifiers changed from: private */
+    public void showProfile(String json) {
+        try {
+            Map<String, Object> map = Json.parseObject(json);
+            Object error = map.get("error");
+            if (error instanceof String) {
+                this.profileText.setText("refused - " + error);
+                return;
+            }
+            String name = Json.str(map, "profile", "");
+            String why = Json.str(map, "why", "");
+            if (name.isEmpty()) {
+                this.profileText.setText("no profile set (stock camera tuning)");
+                return;
+            }
+            this.profileText.setText("active: " + name + (why.isEmpty() ? "" : " - " + why));
+        } catch (Json.JsonException e) {
+            appendLog("bad profile line: " + e.getMessage());
+        }
     }
 
     /* JADX INFO: Access modifiers changed from: private */
@@ -2353,6 +2426,7 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
                     SettingsActivity.this.sendCmd("STATE");
                     SettingsActivity.this.sendCmd("WIFI STATUS");
                     SettingsActivity.this.sendCmd("HOTSPOT STATUS");
+                    SettingsActivity.this.sendCmd("PROFILE STATUS");
                     SettingsActivity settingsActivity2 = SettingsActivity.this;
                     settingsActivity2.setLaneDot(settingsActivity2.ACCENT);
                     SettingsActivity.this.connectButton.setText("Disconnect");
