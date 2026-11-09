@@ -254,6 +254,7 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
         linearLayout.addView(scrollView, new LinearLayout.LayoutParams(-1, 0, 1.0f));
         linearLayout2.addView(buildUpdateCard());
         linearLayout2.addView(buildHotspotCard());
+        linearLayout2.addView(buildPowerDownCard());
         linearLayout2.addView(sectionHeader("APPEARANCE"));
         LinearLayout linearLayoutCard = card();
         LinearLayout linearLayout3 = new LinearLayout(this);
@@ -908,6 +909,19 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
                 }
             } catch (Exception e) {
                 // not a hotspot status line: leave the card as it was
+            }
+            return;
+        }
+        if (str.contains("OK PD ")) {
+            this.powerDownOn = str.contains("OK PD ON");
+            if (this.powerDownText != null) {
+                this.powerDownText.setText(this.powerDownOn
+                        ? "Disabled - the box will not shut itself off while parked"
+                        : "Enabled - normal shutdown ~30 min after ignition off");
+            }
+            if (this.powerDownButton != null) {
+                this.powerDownButton.setEnabled(true);
+                this.powerDownButton.setText(this.powerDownOn ? "Allow power down" : "Disable power down");
             }
             return;
         }
@@ -1869,11 +1883,45 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
     private TextView hotspotText;
     private Button hotspotButton;
     private boolean hotspotOn;
+    private TextView powerDownText;
+    private Button powerDownButton;
+    private boolean powerDownOn;
 
     /**
      * Hotspot or Wi-Fi client. One radio, so it is one or the other: the box's wlan0 can be an AP or
      * a station, never both, and the toggle reports which state it actually reached.
      */
+    private LinearLayout buildPowerDownCard() {
+        LinearLayout card = card();
+        TextView title = new TextView(this);
+        title.setText("POWER");
+        title.setTextColor(this.MUTED);
+        title.setTextSize(12.0f);
+        card.addView(title);
+
+        this.powerDownText = new TextView(this);
+        this.powerDownText.setText("checking...");
+        this.powerDownText.setTextColor(this.TEXT);
+        this.powerDownText.setTextSize(15.0f);
+        card.addView(this.powerDownText);
+
+        Button b = new Button(this);
+        this.powerDownButton = b;
+        b.setAllCaps(false);
+        b.setText("Disable power down");
+        b.setOnClickListener(new android.view.View.OnClickListener() {
+            @Override
+            public void onClick(android.view.View v) {
+                SettingsActivity.this.sendCmd(SettingsActivity.this.powerDownOn ? "PD OFF" : "PD ON");
+                SettingsActivity.this.powerDownText.setText("switching...");
+                SettingsActivity.this.powerDownButton.setEnabled(false);
+                SettingsActivity.this.sendCmd("PD STATUS");
+            }
+        });
+        card.addView(b);
+        return card;
+    }
+
     private LinearLayout buildHotspotCard() {
         LinearLayout card = card();
         TextView title = new TextView(this);
@@ -1899,6 +1947,7 @@ public class SettingsActivity extends Activity implements BtSpp.Listener {
                 SettingsActivity.this.hotspotText.setText("switching...");
                 SettingsActivity.this.hotspotButton.setEnabled(false);
                 SettingsActivity.this.sendCmd("HOTSPOT STATUS");
+                    SettingsActivity.this.sendCmd("PD STATUS");
             }
         });
         card.addView(button);
